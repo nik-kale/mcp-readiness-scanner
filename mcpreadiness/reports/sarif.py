@@ -14,7 +14,6 @@ from mcpreadiness import __version__
 from mcpreadiness.core.models import Finding, ScanResult, Severity
 from mcpreadiness.core.taxonomy import CATEGORY_DESCRIPTIONS, OperationalRiskCategory
 
-
 # SARIF severity levels
 SARIF_LEVELS = {
     Severity.CRITICAL: "error",
@@ -61,7 +60,7 @@ def _build_run(result: ScanResult) -> dict[str, Any]:
     """Build a SARIF run object."""
     return {
         "tool": _build_tool(),
-        "results": [_build_result(f, i) for i, f in enumerate(result.findings)],
+        "results": [_build_result(f, i, result.target) for i, f in enumerate(result.findings)],
         "invocations": [
             {
                 "executionSuccessful": True,
@@ -127,8 +126,102 @@ def _build_rules() -> list[dict[str, Any]]:
     return rules
 
 
-def _build_result(finding: Finding, index: int) -> dict[str, Any]:
-    """Build a SARIF result object from a finding."""
+def _parse_location_region(location: str | None) -> tuple[str | None, dict[str, int] | None]:
+    """
+    Parse a location string to extract file/path and line/region information.
+
+    Supports formats:
+    - "file.json:line"
+    - "file.json:start-end"
+    - "path.to.field"
+    - "tool.name"
+
+    Returns:
+        Tuple of (logical_name, region) where region is a dict with startLine/endLine
+    """
+    if not location:
+        return None, None
+
+    # Check for line number format: "path:123" or "path:10-20"
+    if ":" in location and location.split(":")[-1].replace("-", "").isdigit():
+        parts = location.rsplit(":", 1)
+        logical_name = parts[0]
+        line_part = parts[1]
+
+        if "-" in line_part:
+            # Range format: "10-20"
+            start, end = line_part.split("-", 1)
+            region = {
+                "startLine": int(start),
+                "endLine": int(end),
+            }
+        else:
+            # Single line: "123"
+            line = int(line_part)
+            region = {
+                "startLine": line,
+                "endLine": line,
+            }
+        return logical_name, region
+
+    # No line numbers, just a logical location
+    return location, None
+
+
+def _build_location(finding_location: str | None, target: str | None) -> dict[str, Any] | None:
+    """
+    Build a SARIF location object with physical and logical locations.
+
+    Args:
+        finding_location: The location string from the finding
+        target: The scan target (file path)
+
+    Returns:
+        SARIF location object or None
+    """
+    logical_name, region = _parse_location_region(finding_location)
+
+    # Use target as the artifact URI if available, otherwise use logical name
+    artifact_uri = target or logical_name or "unknown"
+
+    location: dict[str, Any] = {}
+
+    # Build physical location
+    physical_location: dict[str, Any] = {
+        "artifactLocation": {
+            "uri": artifact_uri,
+            "uriBaseId": "%SRCROOT%",
+        },
+    }
+
+    # Add region if we have line information
+    if region:
+        physical_location["region"] = region
+
+    location["physicalLocation"] = physical_location
+
+    # Build logical location if we have a logical name
+    if logical_name and logical_name != artifact_uri:
+        location["logicalLocations"] = [
+            {
+                "name": logical_name,
+                "fullyQualifiedName": logical_name,
+                "kind": "member",  # Use "member" for fields, properties, etc.
+            }
+        ]
+
+    return location
+
+
+def _build_result(finding: Finding, index: int, target: str | None = None) -> dict[str, Any]:
+    """
+    Build a SARIF result object from a finding.
+
+    Args:
+        finding: The finding to convert
+        index: Index of this finding in the results list
+        target: The scan target (file path) for the result
+    """
     result: dict[str, Any] = {
         "ruleId": finding.category.value,
         "ruleIndex": list(OperationalRiskCategory).index(finding.category),
@@ -148,22 +241,10 @@ def _build_result(finding: Finding, index: int) -> dict[str, Any]:
         result["properties"]["ruleId"] = finding.rule_id
 
     # Add location if present
-    if finding.location:
-        location = {
-            "physicalLocation": {
-                "artifactLocation": {
-                    "uri": finding.location,
-                    "uriBaseId": "%SRCROOT%",
-                },
-            },
-            "logicalLocations": [
-                {
-                    "name": finding.location,
-                    "kind": "object",
-                }
-            ],
-        }
-        result["locations"].append(location)
+    if finding.location or target:
+        location = _build_location(finding.location, target)
+        if location:
+            result["locations"].append(location)
 
     # Add evidence as properties
     if finding.evidence:

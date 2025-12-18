@@ -8,7 +8,6 @@ documentation, and manual review.
 from mcpreadiness.core.models import Finding, ScanResult, Severity
 from mcpreadiness.core.taxonomy import CATEGORY_DESCRIPTIONS
 
-
 # Severity emoji mapping
 SEVERITY_EMOJI = {
     Severity.CRITICAL: "🔴",
@@ -122,19 +121,14 @@ def render_markdown(
 def _score_badge(score: int) -> str:
     """Generate a score badge."""
     if score >= 90:
-        color = "brightgreen"
         label = "Excellent"
     elif score >= 80:
-        color = "green"
         label = "Good"
     elif score >= 70:
-        color = "yellow"
         label = "Fair"
     elif score >= 50:
-        color = "orange"
         label = "Poor"
     else:
-        color = "red"
         label = "Critical"
 
     return f"**{score}/100** ({label})"

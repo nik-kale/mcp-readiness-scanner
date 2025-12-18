@@ -15,13 +15,13 @@ import click
 
 from mcpreadiness import __version__
 from mcpreadiness.config import Config, load_config
-from mcpreadiness.core.models import ProviderStatus, ScanResult, Severity
+from mcpreadiness.core.models import ScanResult, Severity
 from mcpreadiness.core.orchestrator import ScanOrchestrator, create_default_orchestrator
 from mcpreadiness.core.taxonomy import CATEGORY_DESCRIPTIONS, OperationalRiskCategory
+from mcpreadiness.providers.base import InspectionProvider
 from mcpreadiness.reports.json_report import render_json
 from mcpreadiness.reports.markdown_report import render_markdown
 from mcpreadiness.reports.sarif import render_sarif
-
 
 # Output format options
 OUTPUT_FORMATS = ["json", "markdown", "sarif"]
@@ -187,7 +187,7 @@ def scan_tool(
 
     # Load tool definition
     if tool_path:
-        with open(tool_path, "r", encoding="utf-8") as f:
+        with open(tool_path, encoding="utf-8") as f:
             tool_definition = json.load(f)
         target_name = tool_path
     else:
@@ -294,14 +294,14 @@ def list_providers(ctx: click.Context) -> None:
     Shows which providers are available (dependencies installed),
     and which are unavailable with reasons.
     """
-    config: Config = ctx.obj["config"]
-    orchestrator = create_default_orchestrator()
+    ctx.obj["config"]
+    create_default_orchestrator()
 
     from mcpreadiness.providers import LLMJudgeProvider, OpaProvider, YaraProvider
     from mcpreadiness.providers.heuristic_provider import HeuristicProvider
 
     # Get status for all provider types
-    all_providers = [
+    all_providers: list[tuple[str, InspectionProvider | None]] = [
         ("heuristic", HeuristicProvider()),
     ]
 
@@ -439,7 +439,7 @@ def init(config_format: str) -> None:
 
             content = yaml.dump(config_dict, default_flow_style=False)
         except ImportError:
-            raise click.UsageError("PyYAML is required for YAML format. Install with: pip install pyyaml")
+            raise click.UsageError("PyYAML is required for YAML format. Install with: pip install pyyaml") from None
     else:  # json
         content = json.dumps(config_dict, indent=2)
 
@@ -447,7 +447,7 @@ def init(config_format: str) -> None:
     click.echo(f"Created {filename}")
 
 
-def _dict_to_toml(d: dict, prefix: str = "") -> str:
+def _dict_to_toml(d: dict[str, Any], prefix: str = "") -> str:
     """Simple dict to TOML converter for when tomli_w is not available."""
     lines = []
 

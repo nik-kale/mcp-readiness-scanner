@@ -1,17 +1,15 @@
 """Tests for the scan orchestrator."""
 
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from mcpreadiness.core.models import (
     Finding,
     OperationalRiskCategory,
-    ScanResult,
     Severity,
 )
 from mcpreadiness.core.orchestrator import (
     ScanOrchestrator,
-    SEVERITY_DEDUCTIONS,
 )
 from mcpreadiness.providers.base import InspectionProvider
 
