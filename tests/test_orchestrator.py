@@ -11,7 +11,6 @@ from mcpreadiness.core.models import (
 )
 from mcpreadiness.core.orchestrator import (
     ScanOrchestrator,
-    calculate_readiness_score,
     SEVERITY_DEDUCTIONS,
 )
 from mcpreadiness.providers.base import InspectionProvider
