@@ -1,8 +1,9 @@
 """Tests for report generators."""
 
 import json
-import pytest
 from datetime import datetime
+
+import pytest
 
 from mcpreadiness.core.models import (
     Finding,

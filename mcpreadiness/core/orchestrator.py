@@ -15,7 +15,6 @@ from typing import Any
 from mcpreadiness.core.models import Finding, ScanResult, Severity
 from mcpreadiness.providers.base import InspectionProvider
 
-
 # Severity deduction points for readiness score calculation
 SEVERITY_DEDUCTIONS: dict[Severity, int] = {
     Severity.CRITICAL: 25,
@@ -338,7 +337,7 @@ class ScanOrchestrator:
         if not path.exists():
             raise FileNotFoundError(f"Configuration file not found: {path}")
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             config = json.load(f)
 
         return await self.scan_config(
@@ -371,7 +370,7 @@ class ScanOrchestrator:
         if not path.exists():
             raise FileNotFoundError(f"Tool definition file not found: {path}")
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             tool_definition = json.load(f)
 
         return await self.scan_tool(

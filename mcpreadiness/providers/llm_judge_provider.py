@@ -18,7 +18,6 @@ from typing import Any
 from mcpreadiness.core.models import Finding, OperationalRiskCategory, Severity
 from mcpreadiness.providers.base import InspectionProvider
 
-
 # Try to import litellm
 _litellm_available = False
 _litellm_import_error: str | None = None

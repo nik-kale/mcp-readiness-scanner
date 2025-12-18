@@ -2,9 +2,9 @@
 
 from mcpreadiness.core.models import (
     Finding,
+    OperationalRiskCategory,
     ScanResult,
     Severity,
-    OperationalRiskCategory,
 )
 from mcpreadiness.core.orchestrator import ScanOrchestrator
 from mcpreadiness.core.taxonomy import CATEGORY_DESCRIPTIONS
