@@ -135,12 +135,21 @@ class TestScanResult:
         assert len(result.findings) == 1
         assert result.providers_used == ["heuristic"]
 
-    def test_score_clamping(self):
-        result = ScanResult(target="test", readiness_score=150)
+    def test_score_validation(self):
+        """Scores must be within 0-100 range."""
+        # Valid scores work
+        result = ScanResult(target="test", readiness_score=100)
         assert result.readiness_score == 100
 
-        result = ScanResult(target="test", readiness_score=-10)
+        result = ScanResult(target="test", readiness_score=0)
         assert result.readiness_score == 0
+
+        # Invalid scores raise ValidationError
+        with pytest.raises(ValidationError):
+            ScanResult(target="test", readiness_score=150)
+
+        with pytest.raises(ValidationError):
+            ScanResult(target="test", readiness_score=-10)
 
     def test_has_critical_findings(self):
         critical = Finding(

@@ -197,7 +197,7 @@ class HeuristicProvider(InspectionProvider):
         else:
             # Check if timeout is zero or negative
             for field in timeout_fields:
-                timeout_value = tool_def.get(field) or config.get(field)
+                timeout_value = tool_def.get(field) if field in tool_def else config.get(field)
                 if timeout_value is not None and timeout_value <= 0:
                     findings.append(
                         Finding(
