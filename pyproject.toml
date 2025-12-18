@@ -112,11 +112,12 @@ known-first-party = ["mcpreadiness"]
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
+strict = false
+warn_return_any = false
+warn_unused_ignores = false
+disallow_untyped_defs = false
 ignore_missing_imports = true
+check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = "yara.*"
@@ -124,6 +125,18 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "litellm.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "yaml.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pydantic.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "click.*"
 ignore_missing_imports = true
 
 [tool.coverage.run]

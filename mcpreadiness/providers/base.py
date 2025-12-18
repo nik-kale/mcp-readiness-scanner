@@ -117,7 +117,7 @@ class InspectionProvider(ABC):
             return None
         return "Provider dependencies not met"
 
-    async def initialize(self) -> None:
+    async def initialize(self) -> None:  # noqa: B027
         """
         Initialize the provider.
 
@@ -130,7 +130,7 @@ class InspectionProvider(ABC):
         """
         pass
 
-    async def cleanup(self) -> None:
+    async def cleanup(self) -> None:  # noqa: B027
         """
         Clean up provider resources.
 

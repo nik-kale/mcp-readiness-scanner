@@ -16,7 +16,6 @@ from typing import Any
 from mcpreadiness.core.models import Finding, OperationalRiskCategory, Severity
 from mcpreadiness.providers.base import InspectionProvider
 
-
 # Default policies directory (relative to this file)
 DEFAULT_POLICIES_DIR = Path(__file__).parent.parent / "rules" / "policies"
 
@@ -345,7 +344,7 @@ class OpaProvider(InspectionProvider):
                                 }
                             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             violations.append(
                 {
                     "message": f"OPA evaluation timed out for {policy_path.name}",

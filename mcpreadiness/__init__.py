@@ -11,9 +11,9 @@ __license__ = "Apache-2.0"
 
 from mcpreadiness.core.models import (
     Finding,
+    OperationalRiskCategory,
     ScanResult,
     Severity,
-    OperationalRiskCategory,
 )
 from mcpreadiness.core.orchestrator import ScanOrchestrator
 

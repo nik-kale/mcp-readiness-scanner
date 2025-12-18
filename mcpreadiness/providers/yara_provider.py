@@ -13,7 +13,6 @@ from typing import Any
 from mcpreadiness.core.models import Finding, OperationalRiskCategory, Severity
 from mcpreadiness.providers.base import InspectionProvider
 
-
 # Try to import yara-python
 _yara_available = False
 _yara_import_error: str | None = None
@@ -127,7 +126,7 @@ class YaraProvider(InspectionProvider):
                 self._compiled_rules = yara.compile(sources=rules_sources)
             except yara.Error:
                 # Fall back to compiling rules individually
-                for name, source in rules_sources.items():
+                for _name, source in rules_sources.items():
                     try:
                         if self._compiled_rules is None:
                             self._compiled_rules = yara.compile(source=source)

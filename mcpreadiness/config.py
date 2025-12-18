@@ -13,7 +13,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # Default configuration file locations
 CONFIG_FILE_NAMES = [
     ".mcp-readiness.toml",
@@ -168,7 +167,7 @@ def load_config_file(path: Path) -> dict[str, Any]:
     """
     suffix = path.suffix.lower()
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         content = f.read()
 
     if suffix == ".toml":
@@ -187,7 +186,7 @@ def load_config_file(path: Path) -> dict[str, Any]:
             raise ImportError(
                 "PyYAML is required to load YAML config files. "
                 "Install with: pip install pyyaml"
-            )
+            ) from None
 
     elif suffix == ".json":
         import json
@@ -306,7 +305,7 @@ def parse_env_value(value: str) -> Any:
     return value
 
 
-def deep_merge(base: dict, override: dict) -> dict:
+def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """
     Deep merge two dictionaries.
 
