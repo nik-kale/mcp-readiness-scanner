@@ -12,7 +12,6 @@ from typing import Any
 from mcpreadiness.core.models import Finding, OperationalRiskCategory, Severity
 from mcpreadiness.providers.base import InspectionProvider
 
-
 # Patterns that suggest dangerous/unreliable behavior in descriptions
 DANGEROUS_PHRASES = [
     (r"ignore\s*error", "ignores errors"),

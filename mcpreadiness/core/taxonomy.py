@@ -6,11 +6,22 @@ operational risk category. These categories focus on production
 reliability and failure modes, NOT security vulnerabilities.
 """
 
+from typing import Any
+
 from mcpreadiness.core.models import OperationalRiskCategory, Severity
 
+__all__ = [
+    "OperationalRiskCategory",
+    "Severity",
+    "CATEGORY_DESCRIPTIONS",
+    "get_category_description",
+    "get_category_severity",
+    "format_category_help",
+    "format_taxonomy_overview",
+]
 
 # Detailed descriptions for each category
-CATEGORY_DESCRIPTIONS: dict[OperationalRiskCategory, dict] = {
+CATEGORY_DESCRIPTIONS: dict[OperationalRiskCategory, dict[str, Any]] = {
     OperationalRiskCategory.SILENT_FAILURE_PATH: {
         "name": "Silent Failure Path",
         "short_description": "Tool may fail without surfacing errors to the caller",
@@ -251,7 +262,7 @@ Agent limitations:
 }
 
 
-def get_category_description(category: OperationalRiskCategory) -> dict:
+def get_category_description(category: OperationalRiskCategory) -> dict[str, Any]:
     """Get the full description for an operational risk category."""
     return CATEGORY_DESCRIPTIONS.get(category, {})
 

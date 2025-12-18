@@ -7,6 +7,7 @@ operational readiness issues.
 
 from mcpreadiness.providers.base import InspectionProvider
 from mcpreadiness.providers.heuristic_provider import HeuristicProvider
+from mcpreadiness.providers.llm_judge_provider import LLMJudgeProvider
 
 # Conditional imports for optional providers
 _yara_available = False
@@ -25,8 +26,6 @@ try:
     _opa_available = True
 except ImportError:
     OpaProvider = None  # type: ignore
-
-from mcpreadiness.providers.llm_judge_provider import LLMJudgeProvider
 
 __all__ = [
     "InspectionProvider",
@@ -67,7 +66,7 @@ def get_default_providers() -> list["InspectionProvider"]:
 
 def get_all_provider_classes() -> list[type]:
     """Get all provider classes (including unavailable ones)."""
-    classes = [HeuristicProvider]
+    classes: list[type] = [HeuristicProvider]
     if YaraProvider is not None:
         classes.append(YaraProvider)
     if OpaProvider is not None:
