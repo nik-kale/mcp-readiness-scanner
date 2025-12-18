@@ -34,6 +34,34 @@ NON_DETERMINISTIC_PHRASES = [
     (r"non-deterministic", "explicitly non-deterministic"),
 ]
 
+# Patterns suggesting blocking/synchronous operations
+BLOCKING_PHRASES = [
+    (r"\bblocks?\b", "blocks execution"),
+    (r"waits?\s*for", "waits for completion"),
+    (r"synchronous(ly)?", "synchronous operation"),
+    (r"hang", "may hang"),
+    (r"will\s*not\s*return\s*until", "blocks until completion"),
+]
+
+# Patterns suggesting deprecated or experimental status
+UNSTABLE_PHRASES = [
+    (r"deprecated", "marked as deprecated"),
+    (r"experimental", "experimental feature"),
+    (r"\bbeta\b", "beta status"),
+    (r"preview", "preview/unstable"),
+    (r"not\s*recommended", "not recommended for use"),
+    (r"use\s*at\s*your\s*own\s*risk", "use at your own risk"),
+]
+
+# Patterns suggesting bulk/cascade operations
+BULK_OPERATION_PHRASES = [
+    (r"\ball\b.*\b(delete|remove|update|modify)", "operates on all items"),
+    (r"batch\s*(delete|remove|update|modify)", "batch operation"),
+    (r"bulk\s*(delete|remove|update|modify)", "bulk operation"),
+    (r"cascade", "cascade operation"),
+    (r"recursive(ly)?\s*(delete|remove)", "recursive operation"),
+]
+
 # Default thresholds
 DEFAULT_MAX_CAPABILITIES = 10
 DEFAULT_MAX_DESCRIPTION_LENGTH = 2000
@@ -55,6 +83,17 @@ class HeuristicProvider(InspectionProvider):
     - No input validation schema
     - Missing rate limit configuration
     - Dangerous phrases in descriptions
+    - Non-deterministic behavior indicators
+    - Missing output/response schema
+    - Missing authentication configuration
+    - Blocking operation warnings
+    - Missing idempotency documentation
+    - Missing version information
+    - Deprecated/experimental warnings
+    - Missing resource cleanup documentation
+    - Bulk/cascade operation risks
+    - Missing circuit breaker configuration
+    - Missing observability hooks
     """
 
     def __init__(
@@ -125,6 +164,36 @@ class HeuristicProvider(InspectionProvider):
 
         # Check for non-deterministic indicators
         findings.extend(self._check_non_deterministic(tool_definition, tool_name))
+
+        # Check for missing output schema
+        findings.extend(self._check_output_schema(tool_definition, tool_name))
+
+        # Check for missing authentication
+        findings.extend(self._check_authentication(tool_definition, tool_name))
+
+        # Check for blocking operations
+        findings.extend(self._check_blocking_operations(tool_definition, tool_name))
+
+        # Check for idempotency documentation
+        findings.extend(self._check_idempotency(tool_definition, tool_name))
+
+        # Check for versioning
+        findings.extend(self._check_versioning(tool_definition, tool_name))
+
+        # Check for deprecated/experimental warnings
+        findings.extend(self._check_unstable_status(tool_definition, tool_name))
+
+        # Check for resource cleanup documentation
+        findings.extend(self._check_resource_cleanup(tool_definition, tool_name))
+
+        # Check for bulk operation risks
+        findings.extend(self._check_bulk_operations(tool_definition, tool_name))
+
+        # Check for circuit breaker
+        findings.extend(self._check_circuit_breaker(tool_definition, tool_name))
+
+        # Check for observability hooks
+        findings.extend(self._check_observability(tool_definition, tool_name))
 
         return findings
 
@@ -574,6 +643,383 @@ class HeuristicProvider(InspectionProvider):
                         rule_id="HEUR-015",
                     )
                 )
+
+        return findings
+
+    def _check_output_schema(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for output/response schema."""
+        findings: list[Finding] = []
+
+        output_schema_fields = ["outputSchema", "output_schema", "responseSchema", "response_schema"]
+        has_output_schema = any(field in tool_def for field in output_schema_fields)
+
+        if not has_output_schema:
+            findings.append(
+                Finding(
+                    category=OperationalRiskCategory.MISSING_ERROR_SCHEMA,
+                    severity=Severity.LOW,
+                    title="No output schema defined",
+                    description=(
+                        f"Tool '{tool_name}' does not define an output schema. "
+                        "Agents cannot reliably parse responses without knowing "
+                        "the expected structure."
+                    ),
+                    location=f"tool.{tool_name}",
+                    provider=self.name,
+                    remediation="Add an 'outputSchema' field defining the structure of successful responses",
+                    rule_id="HEUR-016",
+                )
+            )
+
+        return findings
+
+    def _check_authentication(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for authentication configuration."""
+        findings: list[Finding] = []
+
+        auth_fields = ["auth", "authentication", "credentials", "apiKey", "api_key"]
+        has_auth = any(field in tool_def for field in auth_fields)
+
+        config = tool_def.get("config", {})
+        has_auth = has_auth or any(field in config for field in auth_fields)
+
+        # Check if description mentions external services
+        description = tool_def.get("description", "").lower()
+        mentions_external = any(
+            keyword in description
+            for keyword in ["api", "service", "endpoint", "http", "rest", "request"]
+        )
+
+        if mentions_external and not has_auth:
+            findings.append(
+                Finding(
+                    category=OperationalRiskCategory.SILENT_FAILURE_PATH,
+                    severity=Severity.MEDIUM,
+                    title="No authentication configuration",
+                    description=(
+                        f"Tool '{tool_name}' appears to interact with external services "
+                        "but does not define authentication configuration. This may lead "
+                        "to authorization failures at runtime."
+                    ),
+                    location=f"tool.{tool_name}",
+                    provider=self.name,
+                    remediation="Add authentication configuration (e.g., 'auth', 'apiKey', 'credentials')",
+                    rule_id="HEUR-017",
+                )
+            )
+
+        return findings
+
+    def _check_blocking_operations(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for blocking operation indicators."""
+        findings: list[Finding] = []
+
+        description = tool_def.get("description", "").lower()
+
+        for pattern, meaning in BLOCKING_PHRASES:
+            if re.search(pattern, description, re.IGNORECASE):
+                findings.append(
+                    Finding(
+                        category=OperationalRiskCategory.MISSING_TIMEOUT_GUARD,
+                        severity=Severity.MEDIUM,
+                        title="Blocking operation indicated",
+                        description=(
+                            f"Tool '{tool_name}' description indicates it {meaning}. "
+                            "Blocking operations can cause the entire agent workflow "
+                            "to hang if not properly guarded with timeouts."
+                        ),
+                        location=f"tool.{tool_name}.description",
+                        evidence={"pattern": pattern, "meaning": meaning},
+                        provider=self.name,
+                        remediation=(
+                            "Ensure proper timeout configuration and consider making "
+                            "the operation asynchronous or non-blocking"
+                        ),
+                        rule_id="HEUR-018",
+                    )
+                )
+
+        return findings
+
+    def _check_idempotency(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for idempotency documentation."""
+        findings: list[Finding] = []
+
+        description = tool_def.get("description", "").lower()
+
+        # Check if tool appears to be state-changing
+        state_changing_verbs = [
+            "create", "delete", "update", "modify", "remove", "insert",
+            "write", "post", "put", "patch"
+        ]
+        is_state_changing = any(verb in description for verb in state_changing_verbs)
+
+        # Check if idempotency is documented
+        idempotency_indicators = ["idempotent", "safe to retry", "can be retried"]
+        has_idempotency_doc = any(indicator in description for indicator in idempotency_indicators)
+
+        if is_state_changing and not has_idempotency_doc:
+            findings.append(
+                Finding(
+                    category=OperationalRiskCategory.UNSAFE_RETRY_LOOP,
+                    severity=Severity.MEDIUM,
+                    title="Missing idempotency documentation",
+                    description=(
+                        f"Tool '{tool_name}' appears to perform state-changing operations "
+                        "but doesn't document whether it's idempotent. This is critical "
+                        "for retry logic - non-idempotent operations may cause duplicates."
+                    ),
+                    location=f"tool.{tool_name}.description",
+                    provider=self.name,
+                    remediation=(
+                        "Document whether the operation is idempotent and safe to retry. "
+                        "If not idempotent, consider adding idempotency keys or tokens."
+                    ),
+                    rule_id="HEUR-019",
+                )
+            )
+
+        return findings
+
+    def _check_versioning(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for versioning information."""
+        findings: list[Finding] = []
+
+        version_fields = ["version", "apiVersion", "api_version", "schemaVersion"]
+        has_version = any(field in tool_def for field in version_fields)
+
+        if not has_version:
+            findings.append(
+                Finding(
+                    category=OperationalRiskCategory.NO_OBSERVABILITY_HOOKS,
+                    severity=Severity.LOW,
+                    title="No version information",
+                    description=(
+                        f"Tool '{tool_name}' does not specify a version. "
+                        "Versioning helps track changes and ensure compatibility "
+                        "when tools evolve over time."
+                    ),
+                    location=f"tool.{tool_name}",
+                    provider=self.name,
+                    remediation="Add a 'version' field (e.g., '1.0.0') following semantic versioning",
+                    rule_id="HEUR-020",
+                )
+            )
+
+        return findings
+
+    def _check_unstable_status(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for deprecated or experimental warnings."""
+        findings: list[Finding] = []
+
+        description = tool_def.get("description", "").lower()
+
+        for pattern, meaning in UNSTABLE_PHRASES:
+            if re.search(pattern, description, re.IGNORECASE):
+                findings.append(
+                    Finding(
+                        category=OperationalRiskCategory.SILENT_FAILURE_PATH,
+                        severity=Severity.MEDIUM,
+                        title="Unstable or deprecated tool",
+                        description=(
+                            f"Tool '{tool_name}' is {meaning}. "
+                            "Using unstable or deprecated tools in production "
+                            "may lead to unexpected behavior or breakage."
+                        ),
+                        location=f"tool.{tool_name}.description",
+                        evidence={"pattern": pattern, "meaning": meaning},
+                        provider=self.name,
+                        remediation=(
+                            "Avoid using deprecated/experimental tools in production. "
+                            "If necessary, implement additional safeguards and monitoring."
+                        ),
+                        rule_id="HEUR-021",
+                    )
+                )
+
+        return findings
+
+    def _check_resource_cleanup(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for resource cleanup documentation."""
+        findings: list[Finding] = []
+
+        description = tool_def.get("description", "").lower()
+
+        # Check if tool appears to use resources that need cleanup
+        resource_indicators = [
+            "connection", "file", "stream", "socket", "handle",
+            "session", "lock", "transaction"
+        ]
+        uses_resources = any(indicator in description for indicator in resource_indicators)
+
+        # Check if cleanup is documented
+        cleanup_indicators = ["close", "cleanup", "release", "dispose", "free"]
+        has_cleanup_doc = any(indicator in description for indicator in cleanup_indicators)
+
+        if uses_resources and not has_cleanup_doc:
+            findings.append(
+                Finding(
+                    category=OperationalRiskCategory.SILENT_FAILURE_PATH,
+                    severity=Severity.MEDIUM,
+                    title="Missing resource cleanup documentation",
+                    description=(
+                        f"Tool '{tool_name}' appears to use resources (connections, "
+                        "files, etc.) but doesn't document cleanup procedures. "
+                        "Resource leaks can cause production instability."
+                    ),
+                    location=f"tool.{tool_name}.description",
+                    provider=self.name,
+                    remediation=(
+                        "Document how resources are cleaned up. Ensure proper "
+                        "cleanup in error paths and add timeout-based cleanup."
+                    ),
+                    rule_id="HEUR-022",
+                )
+            )
+
+        return findings
+
+    def _check_bulk_operations(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for bulk/cascade operation risks."""
+        findings: list[Finding] = []
+
+        description = tool_def.get("description", "").lower()
+
+        for pattern, meaning in BULK_OPERATION_PHRASES:
+            if re.search(pattern, description, re.IGNORECASE):
+                # Check if there are safeguards mentioned
+                safeguard_keywords = [
+                    "confirm", "dry-run", "preview", "limit", "max",
+                    "safeguard", "protection", "verify"
+                ]
+                has_safeguards = any(keyword in description for keyword in safeguard_keywords)
+
+                if not has_safeguards:
+                    findings.append(
+                        Finding(
+                            category=OperationalRiskCategory.OVERLOADED_TOOL_SCOPE,
+                            severity=Severity.HIGH,
+                            title="Bulk operation without safeguards",
+                            description=(
+                                f"Tool '{tool_name}' {meaning} but doesn't document "
+                                "safeguards like confirmations, dry-run mode, or limits. "
+                                "Unguarded bulk operations can cause catastrophic data loss."
+                            ),
+                            location=f"tool.{tool_name}.description",
+                            evidence={"pattern": pattern, "meaning": meaning},
+                            provider=self.name,
+                            remediation=(
+                                "Add safeguards: require confirmation, implement dry-run mode, "
+                                "add item limits, or provide preview functionality"
+                            ),
+                            rule_id="HEUR-023",
+                        )
+                    )
+
+        return findings
+
+    def _check_circuit_breaker(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for circuit breaker configuration."""
+        findings: list[Finding] = []
+
+        description = tool_def.get("description", "").lower()
+
+        # Check if tool interacts with external services
+        external_service_indicators = [
+            "api", "service", "endpoint", "http", "rest",
+            "external", "third-party", "remote"
+        ]
+        uses_external = any(indicator in description for indicator in external_service_indicators)
+
+        circuit_breaker_fields = [
+            "circuitBreaker", "circuit_breaker", "failureThreshold",
+            "failure_threshold", "healthCheck", "health_check"
+        ]
+        has_circuit_breaker = any(field in tool_def for field in circuit_breaker_fields)
+
+        config = tool_def.get("config", {})
+        has_circuit_breaker = has_circuit_breaker or any(
+            field in config for field in circuit_breaker_fields
+        )
+
+        if uses_external and not has_circuit_breaker:
+            findings.append(
+                Finding(
+                    category=OperationalRiskCategory.UNSAFE_RETRY_LOOP,
+                    severity=Severity.MEDIUM,
+                    title="No circuit breaker configuration",
+                    description=(
+                        f"Tool '{tool_name}' interacts with external services "
+                        "but doesn't configure a circuit breaker. Without circuit "
+                        "breakers, cascading failures can overwhelm the system."
+                    ),
+                    location=f"tool.{tool_name}",
+                    provider=self.name,
+                    remediation=(
+                        "Add circuit breaker configuration with failure thresholds "
+                        "and automatic recovery mechanisms"
+                    ),
+                    rule_id="HEUR-024",
+                )
+            )
+
+        return findings
+
+    def _check_observability(
+        self, tool_def: dict[str, Any], tool_name: str
+    ) -> list[Finding]:
+        """Check for observability/monitoring hooks."""
+        findings: list[Finding] = []
+
+        observability_fields = [
+            "logging", "metrics", "telemetry", "tracing",
+            "monitoring", "instrumentation", "logger"
+        ]
+        has_observability = any(field in tool_def for field in observability_fields)
+
+        config = tool_def.get("config", {})
+        has_observability = has_observability or any(
+            field in config for field in observability_fields
+        )
+
+        if not has_observability:
+            findings.append(
+                Finding(
+                    category=OperationalRiskCategory.NO_OBSERVABILITY_HOOKS,
+                    severity=Severity.LOW,
+                    title="No observability configuration",
+                    description=(
+                        f"Tool '{tool_name}' does not configure observability hooks "
+                        "(logging, metrics, tracing). Without observability, "
+                        "debugging production issues becomes extremely difficult."
+                    ),
+                    location=f"tool.{tool_name}",
+                    provider=self.name,
+                    remediation=(
+                        "Add logging, metrics, or tracing configuration to enable "
+                        "monitoring and debugging in production"
+                    ),
+                    rule_id="HEUR-025",
+                )
+            )
 
         return findings
 

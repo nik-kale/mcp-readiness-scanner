@@ -223,3 +223,161 @@ class TestHeuristicProvider:
 
         env_findings = [f for f in findings if "environment" in f.title.lower()]
         assert len(env_findings) > 0
+
+    @pytest.mark.asyncio
+    async def test_missing_output_schema(self, provider):
+        """Test that tools without output schema are flagged."""
+        tool = {
+            "name": "test_tool",
+            "description": "A test tool",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        output_findings = [f for f in findings if "output schema" in f.title.lower()]
+        assert len(output_findings) > 0
+        assert any(f.rule_id == "HEUR-016" for f in output_findings)
+
+    @pytest.mark.asyncio
+    async def test_missing_authentication(self, provider):
+        """Test that tools mentioning external APIs without auth config are flagged."""
+        tool = {
+            "name": "api_caller",
+            "description": "Calls an external REST API endpoint to fetch data",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        auth_findings = [f for f in findings if "authentication" in f.title.lower()]
+        assert len(auth_findings) > 0
+        assert any(f.rule_id == "HEUR-017" for f in auth_findings)
+
+    @pytest.mark.asyncio
+    async def test_blocking_operations(self, provider):
+        """Test that blocking operation indicators are detected."""
+        tool = {
+            "name": "blocker",
+            "description": "This operation blocks until the file is ready",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        blocking_findings = [f for f in findings if "blocking" in f.title.lower()]
+        assert len(blocking_findings) > 0
+        assert any(f.rule_id == "HEUR-018" for f in blocking_findings)
+
+    @pytest.mark.asyncio
+    async def test_missing_idempotency(self, provider):
+        """Test that state-changing operations without idempotency docs are flagged."""
+        tool = {
+            "name": "updater",
+            "description": "Updates the user record in the database",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        idempotency_findings = [f for f in findings if "idempotency" in f.title.lower()]
+        assert len(idempotency_findings) > 0
+        assert any(f.rule_id == "HEUR-019" for f in idempotency_findings)
+
+    @pytest.mark.asyncio
+    async def test_missing_version(self, provider):
+        """Test that tools without version info are flagged."""
+        tool = {
+            "name": "test_tool",
+            "description": "A test tool",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        version_findings = [f for f in findings if "version" in f.title.lower()]
+        assert len(version_findings) > 0
+        assert any(f.rule_id == "HEUR-020" for f in version_findings)
+
+    @pytest.mark.asyncio
+    async def test_deprecated_tool(self, provider):
+        """Test that deprecated tools are flagged."""
+        tool = {
+            "name": "old_tool",
+            "description": "This tool is deprecated and will be removed soon",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        unstable_findings = [
+            f for f in findings if "unstable" in f.title.lower() or "deprecated" in f.title.lower()
+        ]
+        assert len(unstable_findings) > 0
+        assert any(f.rule_id == "HEUR-021" for f in unstable_findings)
+
+    @pytest.mark.asyncio
+    async def test_experimental_tool(self, provider):
+        """Test that experimental tools are flagged."""
+        tool = {
+            "name": "new_tool",
+            "description": "This is an experimental feature",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        unstable_findings = [
+            f for f in findings if "unstable" in f.title.lower() or "deprecated" in f.title.lower()
+        ]
+        assert len(unstable_findings) > 0
+        assert any(f.rule_id == "HEUR-021" for f in unstable_findings)
+
+    @pytest.mark.asyncio
+    async def test_missing_resource_cleanup(self, provider):
+        """Test that tools using resources without cleanup docs are flagged."""
+        tool = {
+            "name": "connector",
+            "description": "Opens a database connection to fetch records",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        cleanup_findings = [f for f in findings if "cleanup" in f.title.lower()]
+        assert len(cleanup_findings) > 0
+        assert any(f.rule_id == "HEUR-022" for f in cleanup_findings)
+
+    @pytest.mark.asyncio
+    async def test_bulk_operation_without_safeguards(self, provider):
+        """Test that bulk operations without safeguards are flagged."""
+        tool = {
+            "name": "bulk_deleter",
+            "description": "Performs batch delete operations on matching records",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        bulk_findings = [f for f in findings if "bulk" in f.title.lower()]
+        assert len(bulk_findings) > 0
+        assert any(f.rule_id == "HEUR-023" for f in bulk_findings)
+
+    @pytest.mark.asyncio
+    async def test_missing_circuit_breaker(self, provider):
+        """Test that tools calling external services without circuit breakers are flagged."""
+        tool = {
+            "name": "api_tool",
+            "description": "Makes HTTP requests to an external API service",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        circuit_findings = [f for f in findings if "circuit breaker" in f.title.lower()]
+        assert len(circuit_findings) > 0
+        assert any(f.rule_id == "HEUR-024" for f in circuit_findings)
+
+    @pytest.mark.asyncio
+    async def test_missing_observability(self, provider):
+        """Test that tools without observability config are flagged."""
+        tool = {
+            "name": "test_tool",
+            "description": "A test tool",
+            "timeout": 30000,
+        }
+        findings = await provider.analyze_tool(tool)
+
+        obs_findings = [f for f in findings if "observability" in f.title.lower()]
+        assert len(obs_findings) > 0
+        assert any(f.rule_id == "HEUR-025" for f in obs_findings)
