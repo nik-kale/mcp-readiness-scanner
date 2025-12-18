@@ -75,3 +75,9 @@ venv.bak/
 .mcp-readiness.yaml
 .mcp-readiness.yml
 .mcp-readiness.json
+
+# Demo generation output
+demos/*.gif
+demos/*.svg
+demos/*.cast
+demos/temp/
