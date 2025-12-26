@@ -399,6 +399,161 @@ def list_categories(output_format: str) -> None:
         click.echo("\nFor detailed descriptions, see: docs/taxonomy.md")
 
 
+@cli.command("watch")
+@click.option(
+    "--tool",
+    "-t",
+    "tool_path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to tool definition JSON file to watch",
+)
+@click.option(
+    "--providers",
+    "-p",
+    help="Comma-separated list of providers to use",
+)
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(OUTPUT_FORMATS),
+    default="markdown",
+    help="Output format",
+)
+@click.option(
+    "--clear",
+    is_flag=True,
+    default=True,
+    help="Clear screen before each scan",
+)
+@click.option(
+    "--delta-only",
+    is_flag=True,
+    help="Only show changes from previous scan",
+)
+@click.pass_context
+def watch(
+    ctx: click.Context,
+    tool_path: str,
+    providers: str | None,
+    output_format: str,
+    clear: bool,
+    delta_only: bool,
+) -> None:
+    """
+    Watch a tool definition file and re-scan on changes.
+
+    Useful during development for instant feedback when modifying tool definitions.
+
+    Example:
+        mcp-readiness watch --tool my_tool.json
+        mcp-readiness watch --tool my_tool.json --delta-only
+    """
+    try:
+        from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
+    except ImportError:
+        click.echo(
+            "Watch mode requires the 'watchdog' package. Install with:\n"
+            "  pip install mcp-readiness-scanner[watch]",
+            err=True,
+        )
+        sys.exit(1)
+
+    config: Config = ctx.obj["config"]
+    provider_list = providers.split(",") if providers else config.scan.providers
+
+    tool_path_obj = Path(tool_path).resolve()
+    previous_result: ScanResult | None = None
+
+    class ToolFileHandler(FileSystemEventHandler):
+        """Handler for file system events."""
+
+        def __init__(self, debounce_seconds: float = 0.5):
+            super().__init__()
+            self.last_scan_time = 0
+            self.debounce_seconds = debounce_seconds
+
+        def on_modified(self, event):
+            """Handle file modification events."""
+            if event.src_path != str(tool_path_obj):
+                return
+
+            # Debounce rapid changes
+            import time as time_module
+
+            current_time = time_module.time()
+            if current_time - self.last_scan_time < self.debounce_seconds:
+                return
+            self.last_scan_time = current_time
+
+            # Clear screen if requested
+            if clear:
+                click.clear()
+
+            # Run scan
+            nonlocal previous_result
+            try:
+                with open(tool_path_obj, encoding="utf-8") as f:
+                    tool_definition = json.load(f)
+
+                orchestrator = get_orchestrator(config)
+
+                async def run_scan() -> ScanResult:
+                    return await orchestrator.scan_tool(
+                        tool_definition=tool_definition,
+                        providers=provider_list,
+                        target_name=str(tool_path_obj),
+                    )
+
+                result = asyncio.run(run_scan())
+
+                # Show delta or full result
+                if delta_only and previous_result:
+                    from mcpreadiness.core.diff import ScanDiff
+                    from mcpreadiness.reports.diff_report import render_diff_markdown
+
+                    diff = ScanDiff(baseline=previous_result, current=result)
+                    content = render_diff_markdown(diff, verbose=config.output.verbose)
+                else:
+                    output_result(result, output_format, None, config.output.verbose)
+
+                if delta_only and previous_result:
+                    click.echo(content)
+
+                previous_result = result
+
+            except json.JSONDecodeError as e:
+                click.echo(f"❌ JSON Parse Error: {e}", err=True)
+            except Exception as e:
+                click.echo(f"❌ Scan Error: {e}", err=True)
+
+    # Initial scan
+    click.echo(f"👀 Watching {tool_path_obj} for changes (Ctrl+C to stop)...")
+    click.echo("")
+
+    # Trigger initial scan
+    handler = ToolFileHandler()
+    handler.on_modified(type("Event", (), {"src_path": str(tool_path_obj)})())
+
+    # Set up file watcher
+    observer = Observer()
+    observer.schedule(handler, str(tool_path_obj.parent), recursive=False)
+    observer.start()
+
+    try:
+        import time as time_module
+
+        while True:
+            time_module.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+        click.echo("\n\n👋 Stopped watching")
+
+    observer.join()
+
+
 @cli.command("init")
 @click.option(
     "--format",
