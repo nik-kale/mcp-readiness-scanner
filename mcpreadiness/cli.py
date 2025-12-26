@@ -25,7 +25,7 @@ from mcpreadiness.reports.markdown_report import render_markdown
 from mcpreadiness.reports.sarif import render_sarif
 
 # Output format options
-OUTPUT_FORMATS = ["json", "markdown", "sarif"]
+OUTPUT_FORMATS = ["json", "markdown", "sarif", "html"]
 
 
 def get_orchestrator(config: Config) -> ScanOrchestrator:
@@ -93,6 +93,10 @@ def output_result(
         content = render_markdown(result, verbose=verbose)
     elif format == "sarif":
         content = render_sarif(result)
+    elif format == "html":
+        from mcpreadiness.reports.html_report import render_html
+
+        content = render_html(result, verbose=verbose)
     else:
         raise ValueError(f"Unknown format: {format}")
 
