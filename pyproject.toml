@@ -51,8 +51,11 @@ llm = [
 yaml = [
     "pyyaml>=6.0",
 ]
+watch = [
+    "watchdog>=3.0.0",
+]
 all = [
-    "mcp-readiness-scanner[yara,llm,yaml]",
+    "mcp-readiness-scanner[yara,llm,yaml,watch]",
 ]
 dev = [
     "pytest>=7.0.0",

@@ -73,6 +73,20 @@ Tool 'do_everything' does not specify a timeout. Operations may hang indefinitel
 
 ## Features
 
+### Watch Mode for Development
+
+Get instant feedback while developing tools:
+
+```bash
+# Watch a file and re-scan on changes
+mcp-readiness watch --tool my_tool.json
+
+# Show only what changed from the previous scan
+mcp-readiness watch --tool my_tool.json --delta-only
+```
+
+Requires: `pip install mcp-readiness-scanner[watch]`
+
 ### Inspection Providers
 
 | Provider | Status | Dependencies | Description |
