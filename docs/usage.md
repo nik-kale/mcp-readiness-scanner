@@ -184,6 +184,67 @@ export MCP_READINESS_LLM_MODEL=gpt-4
 export MCP_READINESS_LLM_ENABLED=true
 ```
 
+## Pre-commit Integration
+
+### Setup
+
+1. Install pre-commit if you haven't already:
+
+```bash
+pip install pre-commit
+```
+
+2. Create `.pre-commit-config.yaml` in your project root:
+
+```yaml
+repos:
+  - repo: https://github.com/nik-kale/mcp-readiness-scanner
+    rev: v0.1.0  # Use the latest version
+    hooks:
+      - id: mcp-readiness-scan-tool
+```
+
+3. Install the hooks:
+
+```bash
+pre-commit install
+```
+
+4. Run on all files (optional):
+
+```bash
+pre-commit run --all-files
+```
+
+### Available Hooks
+
+| Hook ID | Description | File Pattern |
+|---------|-------------|--------------|
+| `mcp-readiness-scan-tool` | Scans MCP tool definitions | `*tool*.json` |
+| `mcp-readiness-scan-config` | Scans MCP configuration files | `mcp*config*.json` |
+| `mcp-readiness-scan-all` | Scans all JSON files | `*.json` |
+
+### Customizing Hooks
+
+```yaml
+repos:
+  - repo: https://github.com/nik-kale/mcp-readiness-scanner
+    rev: v0.1.0
+    hooks:
+      - id: mcp-readiness-scan-tool
+        # Only scan specific directories
+        files: '^tools/.*\.json$'
+        # Ignore certain rules
+        args: ['--tool', '--ignore-rules', 'HEUR-001,YARA-002']
+```
+
+### Best Practices
+
+1. **Start with warnings only**: Initially, use pre-commit in advisory mode to avoid blocking commits
+2. **Use ignore files**: Create `.mcp-readiness-ignore` for known false positives
+3. **Gradual adoption**: Start with `mcp-readiness-scan-tool` for new tool definitions
+4. **CI sync**: Use the same configuration in both pre-commit and CI pipelines
+
 ## CI/CD Integration
 
 ### GitHub Actions
