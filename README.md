@@ -131,6 +131,30 @@ export MCP_READINESS_LLM_MODEL=ollama/llama2  # or gpt-4, claude-3-sonnet, etc.
 
 ## CI/CD Integration
 
+### Pre-commit Hook
+
+Add to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/nik-kale/mcp-readiness-scanner
+    rev: v0.1.0  # Use the latest version
+    hooks:
+      - id: mcp-readiness-scan-tool
+        # Scans files matching *tool*.json
+      - id: mcp-readiness-scan-config
+        # Scans files matching mcp*config*.json
+      - id: mcp-readiness-scan-all
+        # Scans all .json files
+```
+
+Then run:
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
 ### GitHub Actions
 
 ```yaml
