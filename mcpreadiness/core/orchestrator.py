@@ -36,9 +36,21 @@ class ScanOrchestrator:
     - Calculates readiness scores
     """
 
-    def __init__(self) -> None:
-        """Initialize the orchestrator with no providers."""
+    def __init__(
+        self,
+        max_concurrent_providers: int | None = None,
+        provider_timeout: int | None = None,
+    ) -> None:
+        """
+        Initialize the orchestrator with no providers.
+
+        Args:
+            max_concurrent_providers: Maximum number of providers to run concurrently
+            provider_timeout: Timeout in seconds for individual provider execution
+        """
         self._providers: dict[str, InspectionProvider] = {}
+        self.max_concurrent_providers = max_concurrent_providers
+        self.provider_timeout = provider_timeout
 
     def register_provider(self, provider: InspectionProvider) -> None:
         """
@@ -162,10 +174,35 @@ class ScanOrchestrator:
         self,
         provider: InspectionProvider,
         tool_definition: dict[str, Any],
+        semaphore: asyncio.Semaphore | None = None,
     ) -> list[Finding]:
-        """Run tool analysis for a single provider with error handling."""
+        """Run tool analysis for a single provider with error handling and timeout."""
         try:
-            return await provider.analyze_tool(tool_definition)
+            # Apply concurrency limit if semaphore is provided
+            if semaphore:
+                async with semaphore:
+                    return await self._execute_with_timeout(
+                        provider.analyze_tool(tool_definition), provider.name
+                    )
+            else:
+                return await self._execute_with_timeout(
+                    provider.analyze_tool(tool_definition), provider.name
+                )
+        except asyncio.TimeoutError:
+            # Return a finding about the timeout
+            return [
+                Finding(
+                    category="missing_timeout_guard",
+                    severity=Severity.MEDIUM,
+                    title=f"Provider '{provider.name}' timed out",
+                    description=f"Analysis timed out after {self.provider_timeout} seconds",
+                    provider=provider.name,
+                    evidence={
+                        "timeout_seconds": self.provider_timeout,
+                        "provider": provider.name,
+                    },
+                )
+            ]
         except Exception as e:
             # Return a finding about the provider failure
             return [
@@ -179,14 +216,45 @@ class ScanOrchestrator:
                 )
             ]
 
+    async def _execute_with_timeout(self, coro, provider_name: str):
+        """Execute a coroutine with optional timeout."""
+        if self.provider_timeout:
+            return await asyncio.wait_for(coro, timeout=self.provider_timeout)
+        else:
+            return await coro
+
     async def _run_provider_config_analysis(
         self,
         provider: InspectionProvider,
         config: dict[str, Any],
+        semaphore: asyncio.Semaphore | None = None,
     ) -> list[Finding]:
-        """Run config analysis for a single provider with error handling."""
+        """Run config analysis for a single provider with error handling and timeout."""
         try:
-            return await provider.analyze_config(config)
+            # Apply concurrency limit if semaphore is provided
+            if semaphore:
+                async with semaphore:
+                    return await self._execute_with_timeout(
+                        provider.analyze_config(config), provider.name
+                    )
+            else:
+                return await self._execute_with_timeout(
+                    provider.analyze_config(config), provider.name
+                )
+        except asyncio.TimeoutError:
+            return [
+                Finding(
+                    category="missing_timeout_guard",
+                    severity=Severity.MEDIUM,
+                    title=f"Provider '{provider.name}' timed out",
+                    description=f"Analysis timed out after {self.provider_timeout} seconds",
+                    provider=provider.name,
+                    evidence={
+                        "timeout_seconds": self.provider_timeout,
+                        "provider": provider.name,
+                    },
+                )
+            ]
         except Exception as e:
             return [
                 Finding(
@@ -224,9 +292,14 @@ class ScanOrchestrator:
         await asyncio.gather(*(p.initialize() for p in selected_providers))
 
         try:
-            # Run all providers concurrently
+            # Create semaphore for concurrency control
+            semaphore = None
+            if self.max_concurrent_providers:
+                semaphore = asyncio.Semaphore(self.max_concurrent_providers)
+
+            # Run all providers concurrently (with optional limit)
             tasks = [
-                self._run_provider_tool_analysis(p, tool_definition)
+                self._run_provider_tool_analysis(p, tool_definition, semaphore)
                 for p in selected_providers
             ]
             results = await asyncio.gather(*tasks)
@@ -281,9 +354,14 @@ class ScanOrchestrator:
         await asyncio.gather(*(p.initialize() for p in selected_providers))
 
         try:
-            # Run all providers concurrently
+            # Create semaphore for concurrency control
+            semaphore = None
+            if self.max_concurrent_providers:
+                semaphore = asyncio.Semaphore(self.max_concurrent_providers)
+
+            # Run all providers concurrently (with optional limit)
             tasks = [
-                self._run_provider_config_analysis(p, config)
+                self._run_provider_config_analysis(p, config, semaphore)
                 for p in selected_providers
             ]
             results = await asyncio.gather(*tasks)
