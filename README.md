@@ -169,6 +169,8 @@ Create `.mcp-readiness.toml` in your project:
 fail_on_critical = true
 fail_on_high = false
 min_score = 70
+max_concurrent_providers = 4  # Limit concurrent provider execution
+provider_timeout = 30  # Timeout per provider in seconds
 
 [heuristic]
 max_capabilities = 10
