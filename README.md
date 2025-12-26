@@ -28,8 +28,14 @@ MCP Readiness Scanner analyzes MCP tool definitions and configurations for opera
 # Install
 pip install mcp-readiness-scanner
 
-# Scan a tool definition
+# Scan a single tool definition
 mcp-readiness scan-tool --tool my_tool.json
+
+# Scan multiple tool definitions
+mcp-readiness scan-tools tool1.json tool2.json --aggregate
+
+# Scan with glob patterns
+mcp-readiness scan-tools "tools/**/*.json" --glob --format markdown
 
 # Scan an MCP config
 mcp-readiness scan-config --config-file ~/.config/mcp/config.json

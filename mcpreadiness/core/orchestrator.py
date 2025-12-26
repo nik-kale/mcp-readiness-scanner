@@ -6,6 +6,7 @@ readiness scores.
 """
 
 import asyncio
+import glob as glob_module
 import json
 import time
 from datetime import datetime
@@ -378,6 +379,78 @@ class ScanOrchestrator:
             providers=providers,
             target_name=str(path),
         )
+
+    async def scan_tools(
+        self,
+        paths: list[Path | str],
+        providers: list[str] | None = None,
+        fail_fast: bool = False,
+    ) -> list[ScanResult]:
+        """
+        Scan multiple MCP tool definition files.
+
+        Args:
+            paths: List of file paths or glob patterns to scan
+            providers: List of provider names to use, or None for all available
+            fail_fast: Stop scanning on first failure
+
+        Returns:
+            List of ScanResult objects, one per file
+
+        Raises:
+            FileNotFoundError: If fail_fast and a file doesn't exist
+            json.JSONDecodeError: If fail_fast and a file isn't valid JSON
+        """
+        # Expand glob patterns
+        expanded_paths: list[Path] = []
+        for path_pattern in paths:
+            pattern_str = str(path_pattern)
+            matches = glob_module.glob(pattern_str, recursive=True)
+            if matches:
+                expanded_paths.extend(Path(p) for p in matches)
+            else:
+                # Not a glob pattern, treat as literal path
+                expanded_paths.append(Path(pattern_str))
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_paths = []
+        for path in expanded_paths:
+            if path not in seen:
+                seen.add(path)
+                unique_paths.append(path)
+
+        results: list[ScanResult] = []
+
+        for path in unique_paths:
+            try:
+                result = await self.scan_tool_file(path, providers=providers)
+                results.append(result)
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                if fail_fast:
+                    raise
+                # Create a result with an error finding
+                results.append(
+                    ScanResult(
+                        target=str(path),
+                        findings=[
+                            Finding(
+                                category="silent_failure_path",
+                                severity=Severity.CRITICAL,
+                                title=f"Failed to scan file: {type(e).__name__}",
+                                description=str(e),
+                                provider="orchestrator",
+                                evidence={"error": str(e)},
+                            )
+                        ],
+                        readiness_score=0,
+                        timestamp=datetime.utcnow(),
+                        providers_used=[],
+                        metadata={"scan_type": "tool", "error": str(e)},
+                    )
+                )
+
+        return results
 
 
 def create_default_orchestrator() -> ScanOrchestrator:
