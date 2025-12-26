@@ -87,6 +87,18 @@ Tool 'do_everything' does not specify a timeout. Operations may hang indefinitel
 - **JSON** — For CI pipelines and programmatic consumption
 - **Markdown** — For PR comments and human review
 - **SARIF** — For GitHub Code Scanning integration
+- **HTML** — Self-contained interactive report (no external dependencies)
+
+```bash
+# Generate an HTML report
+mcp-readiness scan-tool --tool my_tool.json --format html --output report.html
+```
+
+HTML reports include:
+- Interactive filtering by severity
+- Collapsible finding details
+- Dark/light theme support via CSS media queries
+- Single-file format (no external CSS/JS)
 
 ### Operational Risk Categories
 
