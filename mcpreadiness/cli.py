@@ -168,6 +168,20 @@ def cli(ctx: click.Context, config_file: str | None, verbose: bool) -> None:
     type=click.Path(),
     help="Output file (default: stdout)",
 )
+@click.option(
+    "--ignore-rules",
+    help="Comma-separated list of rule IDs to suppress",
+)
+@click.option(
+    "--ignore-file",
+    type=click.Path(exists=True),
+    help="Path to .mcp-readiness-ignore file",
+)
+@click.option(
+    "--show-suppressed",
+    is_flag=True,
+    help="Include suppressed findings in output",
+)
 @click.pass_context
 def scan_tool(
     ctx: click.Context,
@@ -175,6 +189,9 @@ def scan_tool(
     providers: str | None,
     output_format: str,
     output_file: str | None,
+    ignore_rules: str | None,
+    ignore_file: str | None,
+    show_suppressed: bool,
 ) -> None:
     """
     Scan an MCP tool definition for operational readiness issues.
@@ -182,6 +199,7 @@ def scan_tool(
     Example:
         mcp-readiness scan-tool --tool my_tool.json --format markdown
         cat my_tool.json | mcp-readiness scan-tool --format json
+        mcp-readiness scan-tool --tool my_tool.json --ignore-rules HEUR-001,YARA-002
     """
     config: Config = ctx.obj["config"]
 
@@ -200,6 +218,17 @@ def scan_tool(
     # Parse providers
     provider_list = providers.split(",") if providers else config.scan.providers
 
+    # Create suppression manager
+    from mcpreadiness.core.suppression import SuppressionManager
+
+    suppression_manager = None
+    if ignore_rules or ignore_file:
+        ignore_list = ignore_rules.split(",") if ignore_rules else None
+        suppression_manager = SuppressionManager(
+            cli_ignore_rules=ignore_list,
+            ignore_file_path=ignore_file,
+        )
+
     # Create orchestrator and run scan
     orchestrator = get_orchestrator(config)
 
@@ -208,6 +237,8 @@ def scan_tool(
             tool_definition=tool_definition,
             providers=provider_list,
             target_name=target_name,
+            suppression_manager=suppression_manager,
+            show_suppressed=show_suppressed,
         )
 
     result = asyncio.run(run_scan())
