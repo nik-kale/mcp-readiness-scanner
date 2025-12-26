@@ -134,10 +134,21 @@ def cli(ctx: click.Context, config_file: str | None, verbose: bool) -> None:
 
     Scans MCP tool definitions and configurations for operational readiness
     issues like missing timeouts, unsafe retry patterns, and unclear error handling.
+
+    \b
+    Shell Completion:
+        To enable shell completion, run:
+            mcp-readiness --install-completion [bash|zsh|fish]
     """
     ctx.ensure_object(dict)
     ctx.obj["config"] = load_config(config_file=config_file)
     ctx.obj["config"].output.verbose = verbose or ctx.obj["config"].output.verbose
+
+
+def complete_provider_names(ctx, param, incomplete):
+    """Shell completion for provider names."""
+    providers = ["heuristic", "yara", "opa", "llm-judge"]
+    return [p for p in providers if p.startswith(incomplete)]
 
 
 @cli.command("scan-tool")
@@ -147,11 +158,13 @@ def cli(ctx: click.Context, config_file: str | None, verbose: bool) -> None:
     "tool_path",
     type=click.Path(exists=True),
     help="Path to tool definition JSON file (or use stdin)",
+    shell_complete=click.Path(exists=True).shell_complete,
 )
 @click.option(
     "--providers",
     "-p",
     help="Comma-separated list of providers to use",
+    shell_complete=complete_provider_names,
 )
 @click.option(
     "--format",
@@ -227,11 +240,13 @@ def scan_tool(
     type=click.Path(exists=True),
     required=True,
     help="Path to MCP configuration file",
+    shell_complete=click.Path(exists=True).shell_complete,
 )
 @click.option(
     "--providers",
     "-p",
     help="Comma-separated list of providers to use",
+    shell_complete=complete_provider_names,
 )
 @click.option(
     "--format",
