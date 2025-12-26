@@ -37,7 +37,10 @@ def get_orchestrator(config: Config) -> ScanOrchestrator:
         YaraProvider,
     )
 
-    orchestrator = ScanOrchestrator()
+    orchestrator = ScanOrchestrator(
+        max_concurrent_providers=config.scan.max_concurrent_providers,
+        provider_timeout=config.scan.provider_timeout,
+    )
 
     # Register heuristic provider (always available)
     if config.heuristic.enabled:
