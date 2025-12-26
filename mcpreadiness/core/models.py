@@ -108,6 +108,9 @@ class ScanResult(BaseModel):
     findings: list[Finding] = Field(
         default_factory=list, description="List of findings from all providers"
     )
+    suppressed_findings: list[Finding] | None = Field(
+        default=None, description="List of findings that were suppressed"
+    )
     readiness_score: int = Field(
         ge=0,
         le=100,

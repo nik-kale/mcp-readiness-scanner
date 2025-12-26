@@ -73,6 +73,31 @@ Tool 'do_everything' does not specify a timeout. Operations may hang indefinitel
 
 ## Features
 
+### Rule Suppression
+
+Suppress false positives or intentional deviations:
+
+```bash
+# Suppress specific rules via CLI
+mcp-readiness scan-tool --tool my_tool.json --ignore-rules HEUR-001,YARA-002
+
+# Use an ignore file
+mcp-readiness scan-tool --tool my_tool.json --ignore-file .mcp-readiness-ignore
+
+# Show what was suppressed
+mcp-readiness scan-tool --tool my_tool.json --ignore-rules HEUR-001 --show-suppressed
+```
+
+Or add inline suppression to your tool definition:
+
+```json
+{
+  "name": "my_tool",
+  "description": "Does something useful",
+  "mcp-readiness-ignore": ["HEUR-001", "HEUR-003"]
+}
+```
+
 ### Inspection Providers
 
 | Provider | Status | Dependencies | Description |

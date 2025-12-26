@@ -110,6 +110,39 @@ def render_markdown(
         lines.append("*No issues found! Your tool appears to be production-ready.*")
         lines.append("")
 
+    # Suppressed findings section
+    if result.suppressed_findings:
+        lines.append("## Suppressed Findings")
+        lines.append("")
+        lines.append(f"**Total Suppressed:** {len(result.suppressed_findings)}")
+        lines.append("")
+
+        # Group by severity
+        suppressed_by_severity: dict[Severity, list[Finding]] = {}
+        for finding in result.suppressed_findings:
+            if finding.severity not in suppressed_by_severity:
+                suppressed_by_severity[finding.severity] = []
+            suppressed_by_severity[finding.severity].append(finding)
+
+        # Output in severity order
+        for severity in Severity:
+            findings = suppressed_by_severity.get(severity, [])
+            if not findings:
+                continue
+
+            emoji = SEVERITY_EMOJI.get(severity, "")
+            lines.append(f"### {emoji} {severity.value.capitalize()} ({len(findings)})")
+            lines.append("")
+
+            for i, finding in enumerate(findings, 1):
+                lines.append(f"#### {i}. {finding.title}")
+                lines.append("")
+                lines.append(f"- **Rule ID:** `{finding.rule_id}`")
+                lines.append(f"- **Reason:** Suppressed by configuration")
+                lines.append("")
+
+        lines.append("")
+
     # Footer
     lines.append("---")
     lines.append("")
