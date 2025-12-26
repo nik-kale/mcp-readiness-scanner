@@ -46,6 +46,23 @@ mcp-readiness list-providers
 
 **No API keys required.** Works out of the box with zero external dependencies.
 
+### Shell Completion
+
+Enable tab completion for your shell:
+
+```bash
+# Bash
+_MCP_READINESS_COMPLETE=bash_source mcp-readiness > ~/.mcp-readiness-complete.bash
+echo 'source ~/.mcp-readiness-complete.bash' >> ~/.bashrc
+
+# Zsh
+_MCP_READINESS_COMPLETE=zsh_source mcp-readiness > ~/.mcp-readiness-complete.zsh
+echo 'source ~/.mcp-readiness-complete.zsh' >> ~/.zshrc
+
+# Fish
+_MCP_READINESS_COMPLETE=fish_source mcp-readiness > ~/.config/fish/completions/mcp-readiness.fish
+```
+
 ## Example Output
 
 ```
