@@ -205,6 +205,8 @@ class ScanOrchestrator:
         tool_definition: dict[str, Any],
         providers: list[str] | None = None,
         target_name: str | None = None,
+        suppression_manager: Any | None = None,
+        show_suppressed: bool = False,
     ) -> ScanResult:
         """
         Scan a single MCP tool definition.
@@ -213,6 +215,8 @@ class ScanOrchestrator:
             tool_definition: Dictionary containing the tool definition
             providers: List of provider names to use, or None for all available
             target_name: Optional name for the target (defaults to tool name)
+            suppression_manager: Optional SuppressionManager for filtering findings
+            show_suppressed: Include suppressed findings in the result
 
         Returns:
             ScanResult with aggregated findings and readiness score
@@ -237,6 +241,13 @@ class ScanOrchestrator:
             for finding_list in results:
                 all_findings.extend(finding_list)
 
+            # Apply suppression if manager is provided
+            suppressed_findings: list[Finding] | None = None
+            if suppression_manager:
+                all_findings, suppressed_findings = suppression_manager.filter_findings(
+                    all_findings, tool_definition
+                )
+
             # Determine target name
             target = target_name or tool_definition.get("name", "unknown_tool")
 
@@ -247,6 +258,7 @@ class ScanOrchestrator:
             return ScanResult(
                 target=target,
                 findings=all_findings,
+                suppressed_findings=suppressed_findings if show_suppressed else None,
                 readiness_score=score,
                 timestamp=datetime.utcnow(),
                 providers_used=[p.name for p in selected_providers],
