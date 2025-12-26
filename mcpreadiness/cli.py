@@ -127,8 +127,9 @@ def determine_exit_code(result: ScanResult, config: Config) -> int:
     help="Path to configuration file",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
+@click.option("--no-progress", is_flag=True, help="Disable progress indicators")
 @click.pass_context
-def cli(ctx: click.Context, config_file: str | None, verbose: bool) -> None:
+def cli(ctx: click.Context, config_file: str | None, verbose: bool, no_progress: bool) -> None:
     """
     MCP Readiness Scanner - Production readiness scanner for MCP servers and agentic AI tools.
 
@@ -138,6 +139,7 @@ def cli(ctx: click.Context, config_file: str | None, verbose: bool) -> None:
     ctx.ensure_object(dict)
     ctx.obj["config"] = load_config(config_file=config_file)
     ctx.obj["config"].output.verbose = verbose or ctx.obj["config"].output.verbose
+    ctx.obj["no_progress"] = no_progress
 
 
 @cli.command("scan-tool")
@@ -203,7 +205,16 @@ def scan_tool(
     # Create orchestrator and run scan
     orchestrator = get_orchestrator(config)
 
+    # Show progress if in TTY and verbose mode and not disabled
+    no_progress = ctx.obj.get("no_progress", False)
+    show_progress = sys.stderr.isatty() and config.output.verbose and not no_progress
+
     async def run_scan() -> ScanResult:
+        if show_progress:
+            click.echo("🔍 Scanning tool definition...", err=True)
+            available_providers = [p.name for p in orchestrator.list_available_providers()]
+            click.echo(f"📦 Providers: {', '.join(provider_list or available_providers)}", err=True)
+        
         return await orchestrator.scan_tool(
             tool_definition=tool_definition,
             providers=provider_list,
@@ -211,6 +222,9 @@ def scan_tool(
         )
 
     result = asyncio.run(run_scan())
+    
+    if show_progress:
+        click.echo(f"✅ Scan complete! Score: {result.readiness_score}/100", err=True)
 
     # Output result
     output_result(result, output_format, output_file, config.output.verbose)
@@ -270,13 +284,25 @@ def scan_config(
     # Create orchestrator and run scan
     orchestrator = get_orchestrator(config)
 
+    # Show progress if in TTY and verbose mode and not disabled
+    no_progress = ctx.obj.get("no_progress", False)
+    show_progress = sys.stderr.isatty() and config.output.verbose and not no_progress
+
     async def run_scan() -> ScanResult:
+        if show_progress:
+            click.echo("🔍 Scanning MCP configuration...", err=True)
+            available_providers = [p.name for p in orchestrator.list_available_providers()]
+            click.echo(f"📦 Providers: {', '.join(provider_list or available_providers)}", err=True)
+        
         return await orchestrator.scan_config_file(
             path=mcp_config_path,
             providers=provider_list,
         )
 
     result = asyncio.run(run_scan())
+    
+    if show_progress:
+        click.echo(f"✅ Scan complete! Score: {result.readiness_score}/100", err=True)
 
     # Output result
     output_result(result, output_format, output_file, config.output.verbose)
