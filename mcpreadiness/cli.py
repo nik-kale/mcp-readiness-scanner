@@ -8,6 +8,7 @@ for operational readiness issues.
 import asyncio
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -217,6 +218,131 @@ def scan_tool(
 
     # Exit with appropriate code
     sys.exit(determine_exit_code(result, config))
+
+
+@cli.command("scan-tools")
+@click.argument("tool_paths", nargs=-1, required=True)
+@click.option(
+    "--glob",
+    "-g",
+    "use_glob",
+    is_flag=True,
+    help="Treat paths as glob patterns",
+)
+@click.option(
+    "--fail-fast",
+    is_flag=True,
+    help="Stop scanning on first error",
+)
+@click.option(
+    "--providers",
+    "-p",
+    help="Comma-separated list of providers to use",
+)
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(OUTPUT_FORMATS),
+    default="json",
+    help="Output format",
+)
+@click.option(
+    "--output",
+    "-o",
+    "output_file",
+    type=click.Path(),
+    help="Output file (default: stdout)",
+)
+@click.option(
+    "--aggregate",
+    "-a",
+    is_flag=True,
+    help="Aggregate all results into a single report",
+)
+@click.pass_context
+def scan_tools(
+    ctx: click.Context,
+    tool_paths: tuple[str, ...],
+    use_glob: bool,
+    fail_fast: bool,
+    providers: str | None,
+    output_format: str,
+    output_file: str | None,
+    aggregate: bool,
+) -> None:
+    """
+    Scan multiple MCP tool definition files for operational readiness issues.
+
+    Example:
+        mcp-readiness scan-tools tool1.json tool2.json --format markdown
+        mcp-readiness scan-tools "tools/**/*.json" --glob --aggregate
+    """
+    config: Config = ctx.obj["config"]
+
+    # Parse providers
+    provider_list = providers.split(",") if providers else config.scan.providers
+
+    # Create orchestrator and run scan
+    orchestrator = get_orchestrator(config)
+
+    async def run_scan() -> list[ScanResult]:
+        return await orchestrator.scan_tools(
+            paths=list(tool_paths),
+            providers=provider_list,
+            fail_fast=fail_fast,
+        )
+
+    results = asyncio.run(run_scan())
+
+    if aggregate:
+        # Aggregate all findings into one result
+        all_findings = []
+        all_providers = set()
+        total_duration = 0
+
+        for result in results:
+            all_findings.extend(result.findings)
+            all_providers.update(result.providers_used)
+            if result.scan_duration_ms:
+                total_duration += result.scan_duration_ms
+
+        aggregated_result = ScanResult(
+            target=f"{len(results)} files",
+            findings=all_findings,
+            readiness_score=ScanOrchestrator.calculate_readiness_score(all_findings),
+            timestamp=results[0].timestamp if results else datetime.utcnow(),
+            providers_used=list(all_providers),
+            scan_duration_ms=total_duration,
+            metadata={
+                "scan_type": "batch",
+                "file_count": len(results),
+                "files": [r.target for r in results],
+            },
+        )
+
+        output_result(aggregated_result, output_format, output_file, config.output.verbose)
+        sys.exit(determine_exit_code(aggregated_result, config))
+    else:
+        # Output individual results
+        if output_format == "json":
+            import json
+
+            content = json.dumps([r.model_dump(mode="json") for r in results], indent=2)
+            if output_file:
+                Path(output_file).write_text(content, encoding="utf-8")
+            else:
+                click.echo(content)
+        else:
+            # For markdown/sarif, output each result separately
+            for i, result in enumerate(results):
+                if i > 0 and not output_file:
+                    click.echo("\n" + "=" * 80 + "\n")
+                output_result(result, output_format, output_file, config.output.verbose)
+
+        # Determine exit code based on worst result
+        exit_codes = [determine_exit_code(r, config) for r in results]
+        sys.exit(max(exit_codes))
 
 
 @cli.command("scan-config")
