@@ -73,6 +73,23 @@ Tool 'do_everything' does not specify a timeout. Operations may hang indefinitel
 
 ## Features
 
+### Baseline/Diff Mode for CI
+
+Track regressions by comparing scans against a baseline:
+
+```bash
+# Save a baseline
+mcp-readiness scan-tool --tool my_tool.json --output baseline.json
+
+# Compare current state to baseline (shows only new findings)
+mcp-readiness scan-diff baseline.json current.json --format markdown
+
+# Fail CI only on new issues
+mcp-readiness scan-diff baseline.json current.json --fail-on-regression
+```
+
+Perfect for gradual adoption — fix new issues while tracking existing technical debt.
+
 ### Inspection Providers
 
 | Provider | Status | Dependencies | Description |

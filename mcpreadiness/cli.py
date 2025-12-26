@@ -399,6 +399,89 @@ def list_categories(output_format: str) -> None:
         click.echo("\nFor detailed descriptions, see: docs/taxonomy.md")
 
 
+@cli.command("scan-diff")
+@click.argument("baseline_file", type=click.Path(exists=True))
+@click.argument("current_file", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(["json", "markdown"]),
+    default="markdown",
+    help="Output format",
+)
+@click.option(
+    "--output",
+    "-o",
+    "output_file",
+    type=click.Path(),
+    help="Output file (default: stdout)",
+)
+@click.option(
+    "--fail-on-regression",
+    is_flag=True,
+    help="Exit with error code if new findings are detected",
+)
+@click.pass_context
+def scan_diff(
+    ctx: click.Context,
+    baseline_file: str,
+    current_file: str,
+    output_format: str,
+    output_file: str | None,
+    fail_on_regression: bool,
+) -> None:
+    """
+    Compare two scan results and show the difference.
+
+    This is useful in CI to only fail on NEW findings introduced by a change,
+    rather than all existing issues.
+
+    Example:
+        mcp-readiness scan-diff baseline.json current.json --format markdown
+        mcp-readiness scan-diff old.json new.json --fail-on-regression
+    """
+    config: Config = ctx.obj["config"]
+
+    # Load scan results
+    with open(baseline_file, encoding="utf-8") as f:
+        baseline_data = json.load(f)
+        baseline = ScanResult(**baseline_data)
+
+    with open(current_file, encoding="utf-8") as f:
+        current_data = json.load(f)
+        current = ScanResult(**current_data)
+
+    # Compute diff
+    from mcpreadiness.core.diff import ScanDiff
+
+    diff = ScanDiff(baseline=baseline, current=current)
+
+    # Output result
+    if output_format == "json":
+        content = json.dumps(diff.to_dict(), indent=2)
+    else:  # markdown
+        from mcpreadiness.reports.diff_report import render_diff_markdown
+
+        content = render_diff_markdown(diff, verbose=config.output.verbose)
+
+    if output_file:
+        Path(output_file).write_text(content, encoding="utf-8")
+        if config.output.verbose:
+            click.echo(f"Diff written to: {output_file}", err=True)
+    else:
+        click.echo(content)
+
+    # Exit with appropriate code
+    if fail_on_regression and diff.has_regressions:
+        if diff.has_critical_regressions:
+            sys.exit(2)
+        else:
+            sys.exit(1)
+
+    sys.exit(0)
+
+
 @cli.command("init")
 @click.option(
     "--format",
