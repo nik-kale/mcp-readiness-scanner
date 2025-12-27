@@ -6,6 +6,7 @@ readiness scores.
 """
 
 import asyncio
+import glob as glob_module
 import json
 import time
 from datetime import datetime
@@ -36,9 +37,21 @@ class ScanOrchestrator:
     - Calculates readiness scores
     """
 
-    def __init__(self) -> None:
-        """Initialize the orchestrator with no providers."""
+    def __init__(
+        self,
+        max_concurrent_providers: int | None = None,
+        provider_timeout: int | None = None,
+    ) -> None:
+        """
+        Initialize the orchestrator with no providers.
+
+        Args:
+            max_concurrent_providers: Maximum number of providers to run concurrently
+            provider_timeout: Timeout in seconds for individual provider execution
+        """
         self._providers: dict[str, InspectionProvider] = {}
+        self.max_concurrent_providers = max_concurrent_providers
+        self.provider_timeout = provider_timeout
 
     def register_provider(self, provider: InspectionProvider) -> None:
         """
@@ -162,10 +175,35 @@ class ScanOrchestrator:
         self,
         provider: InspectionProvider,
         tool_definition: dict[str, Any],
+        semaphore: asyncio.Semaphore | None = None,
     ) -> list[Finding]:
-        """Run tool analysis for a single provider with error handling."""
+        """Run tool analysis for a single provider with error handling and timeout."""
         try:
-            return await provider.analyze_tool(tool_definition)
+            # Apply concurrency limit if semaphore is provided
+            if semaphore:
+                async with semaphore:
+                    return await self._execute_with_timeout(
+                        provider.analyze_tool(tool_definition), provider.name
+                    )
+            else:
+                return await self._execute_with_timeout(
+                    provider.analyze_tool(tool_definition), provider.name
+                )
+        except asyncio.TimeoutError:
+            # Return a finding about the timeout
+            return [
+                Finding(
+                    category="missing_timeout_guard",
+                    severity=Severity.MEDIUM,
+                    title=f"Provider '{provider.name}' timed out",
+                    description=f"Analysis timed out after {self.provider_timeout} seconds",
+                    provider=provider.name,
+                    evidence={
+                        "timeout_seconds": self.provider_timeout,
+                        "provider": provider.name,
+                    },
+                )
+            ]
         except Exception as e:
             # Return a finding about the provider failure
             return [
@@ -179,14 +217,45 @@ class ScanOrchestrator:
                 )
             ]
 
+    async def _execute_with_timeout(self, coro, provider_name: str):
+        """Execute a coroutine with optional timeout."""
+        if self.provider_timeout:
+            return await asyncio.wait_for(coro, timeout=self.provider_timeout)
+        else:
+            return await coro
+
     async def _run_provider_config_analysis(
         self,
         provider: InspectionProvider,
         config: dict[str, Any],
+        semaphore: asyncio.Semaphore | None = None,
     ) -> list[Finding]:
-        """Run config analysis for a single provider with error handling."""
+        """Run config analysis for a single provider with error handling and timeout."""
         try:
-            return await provider.analyze_config(config)
+            # Apply concurrency limit if semaphore is provided
+            if semaphore:
+                async with semaphore:
+                    return await self._execute_with_timeout(
+                        provider.analyze_config(config), provider.name
+                    )
+            else:
+                return await self._execute_with_timeout(
+                    provider.analyze_config(config), provider.name
+                )
+        except asyncio.TimeoutError:
+            return [
+                Finding(
+                    category="missing_timeout_guard",
+                    severity=Severity.MEDIUM,
+                    title=f"Provider '{provider.name}' timed out",
+                    description=f"Analysis timed out after {self.provider_timeout} seconds",
+                    provider=provider.name,
+                    evidence={
+                        "timeout_seconds": self.provider_timeout,
+                        "provider": provider.name,
+                    },
+                )
+            ]
         except Exception as e:
             return [
                 Finding(
@@ -204,6 +273,8 @@ class ScanOrchestrator:
         tool_definition: dict[str, Any],
         providers: list[str] | None = None,
         target_name: str | None = None,
+        suppression_manager: Any | None = None,
+        show_suppressed: bool = False,
     ) -> ScanResult:
         """
         Scan a single MCP tool definition.
@@ -212,6 +283,8 @@ class ScanOrchestrator:
             tool_definition: Dictionary containing the tool definition
             providers: List of provider names to use, or None for all available
             target_name: Optional name for the target (defaults to tool name)
+            suppression_manager: Optional SuppressionManager for filtering findings
+            show_suppressed: Include suppressed findings in the result
 
         Returns:
             ScanResult with aggregated findings and readiness score
@@ -224,9 +297,14 @@ class ScanOrchestrator:
         await asyncio.gather(*(p.initialize() for p in selected_providers))
 
         try:
-            # Run all providers concurrently
+            # Create semaphore for concurrency control
+            semaphore = None
+            if self.max_concurrent_providers:
+                semaphore = asyncio.Semaphore(self.max_concurrent_providers)
+
+            # Run all providers concurrently (with optional limit)
             tasks = [
-                self._run_provider_tool_analysis(p, tool_definition)
+                self._run_provider_tool_analysis(p, tool_definition, semaphore)
                 for p in selected_providers
             ]
             results = await asyncio.gather(*tasks)
@@ -235,6 +313,13 @@ class ScanOrchestrator:
             all_findings: list[Finding] = []
             for finding_list in results:
                 all_findings.extend(finding_list)
+
+            # Apply suppression if manager is provided
+            suppressed_findings: list[Finding] | None = None
+            if suppression_manager:
+                all_findings, suppressed_findings = suppression_manager.filter_findings(
+                    all_findings, tool_definition
+                )
 
             # Determine target name
             target = target_name or tool_definition.get("name", "unknown_tool")
@@ -246,6 +331,7 @@ class ScanOrchestrator:
             return ScanResult(
                 target=target,
                 findings=all_findings,
+                suppressed_findings=suppressed_findings if show_suppressed else None,
                 readiness_score=score,
                 timestamp=datetime.utcnow(),
                 providers_used=[p.name for p in selected_providers],
@@ -281,9 +367,14 @@ class ScanOrchestrator:
         await asyncio.gather(*(p.initialize() for p in selected_providers))
 
         try:
-            # Run all providers concurrently
+            # Create semaphore for concurrency control
+            semaphore = None
+            if self.max_concurrent_providers:
+                semaphore = asyncio.Semaphore(self.max_concurrent_providers)
+
+            # Run all providers concurrently (with optional limit)
             tasks = [
-                self._run_provider_config_analysis(p, config)
+                self._run_provider_config_analysis(p, config, semaphore)
                 for p in selected_providers
             ]
             results = await asyncio.gather(*tasks)
@@ -378,6 +469,78 @@ class ScanOrchestrator:
             providers=providers,
             target_name=str(path),
         )
+
+    async def scan_tools(
+        self,
+        paths: list[Path | str],
+        providers: list[str] | None = None,
+        fail_fast: bool = False,
+    ) -> list[ScanResult]:
+        """
+        Scan multiple MCP tool definition files.
+
+        Args:
+            paths: List of file paths or glob patterns to scan
+            providers: List of provider names to use, or None for all available
+            fail_fast: Stop scanning on first failure
+
+        Returns:
+            List of ScanResult objects, one per file
+
+        Raises:
+            FileNotFoundError: If fail_fast and a file doesn't exist
+            json.JSONDecodeError: If fail_fast and a file isn't valid JSON
+        """
+        # Expand glob patterns
+        expanded_paths: list[Path] = []
+        for path_pattern in paths:
+            pattern_str = str(path_pattern)
+            matches = glob_module.glob(pattern_str, recursive=True)
+            if matches:
+                expanded_paths.extend(Path(p) for p in matches)
+            else:
+                # Not a glob pattern, treat as literal path
+                expanded_paths.append(Path(pattern_str))
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_paths = []
+        for path in expanded_paths:
+            if path not in seen:
+                seen.add(path)
+                unique_paths.append(path)
+
+        results: list[ScanResult] = []
+
+        for path in unique_paths:
+            try:
+                result = await self.scan_tool_file(path, providers=providers)
+                results.append(result)
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                if fail_fast:
+                    raise
+                # Create a result with an error finding
+                results.append(
+                    ScanResult(
+                        target=str(path),
+                        findings=[
+                            Finding(
+                                category="silent_failure_path",
+                                severity=Severity.CRITICAL,
+                                title=f"Failed to scan file: {type(e).__name__}",
+                                description=str(e),
+                                provider="orchestrator",
+                                evidence={"error": str(e)},
+                            )
+                        ],
+                        readiness_score=0,
+                        timestamp=datetime.utcnow(),
+                        providers_used=[],
+                        metadata={"scan_type": "tool", "error": str(e)},
+                    )
+                )
+
+        return results
 
 
 def create_default_orchestrator() -> ScanOrchestrator:

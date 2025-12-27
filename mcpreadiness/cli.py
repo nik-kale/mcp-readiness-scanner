@@ -8,6 +8,7 @@ for operational readiness issues.
 import asyncio
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +25,7 @@ from mcpreadiness.reports.markdown_report import render_markdown
 from mcpreadiness.reports.sarif import render_sarif
 
 # Output format options
-OUTPUT_FORMATS = ["json", "markdown", "sarif"]
+OUTPUT_FORMATS = ["json", "markdown", "sarif", "html"]
 
 
 def get_orchestrator(config: Config) -> ScanOrchestrator:
@@ -36,7 +37,10 @@ def get_orchestrator(config: Config) -> ScanOrchestrator:
         YaraProvider,
     )
 
-    orchestrator = ScanOrchestrator()
+    orchestrator = ScanOrchestrator(
+        max_concurrent_providers=config.scan.max_concurrent_providers,
+        provider_timeout=config.scan.provider_timeout,
+    )
 
     # Register heuristic provider (always available)
     if config.heuristic.enabled:
@@ -92,6 +96,10 @@ def output_result(
         content = render_markdown(result, verbose=verbose)
     elif format == "sarif":
         content = render_sarif(result)
+    elif format == "html":
+        from mcpreadiness.reports.html_report import render_html
+
+        content = render_html(result, verbose=verbose)
     else:
         raise ValueError(f"Unknown format: {format}")
 
@@ -135,11 +143,22 @@ def cli(ctx: click.Context, config_file: str | None, verbose: bool, no_progress:
 
     Scans MCP tool definitions and configurations for operational readiness
     issues like missing timeouts, unsafe retry patterns, and unclear error handling.
+
+    \b
+    Shell Completion:
+        To enable shell completion, run:
+            mcp-readiness --install-completion [bash|zsh|fish]
     """
     ctx.ensure_object(dict)
     ctx.obj["config"] = load_config(config_file=config_file)
     ctx.obj["config"].output.verbose = verbose or ctx.obj["config"].output.verbose
     ctx.obj["no_progress"] = no_progress
+
+
+def complete_provider_names(ctx, param, incomplete):
+    """Shell completion for provider names."""
+    providers = ["heuristic", "yara", "opa", "llm-judge"]
+    return [p for p in providers if p.startswith(incomplete)]
 
 
 @cli.command("scan-tool")
@@ -149,6 +168,136 @@ def cli(ctx: click.Context, config_file: str | None, verbose: bool, no_progress:
     "tool_path",
     type=click.Path(exists=True),
     help="Path to tool definition JSON file (or use stdin)",
+    shell_complete=click.Path(exists=True).shell_complete,
+)
+@click.option(
+    "--providers",
+    "-p",
+    help="Comma-separated list of providers to use",
+    shell_complete=complete_provider_names,
+)
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(OUTPUT_FORMATS),
+    default="json",
+    help="Output format",
+)
+@click.option(
+    "--output",
+    "-o",
+    "output_file",
+    type=click.Path(),
+    help="Output file (default: stdout)",
+)
+@click.option(
+    "--ignore-rules",
+    help="Comma-separated list of rule IDs to suppress",
+)
+@click.option(
+    "--ignore-file",
+    type=click.Path(exists=True),
+    help="Path to .mcp-readiness-ignore file",
+)
+@click.option(
+    "--show-suppressed",
+    is_flag=True,
+    help="Include suppressed findings in output",
+)
+@click.pass_context
+def scan_tool(
+    ctx: click.Context,
+    tool_path: str | None,
+    providers: str | None,
+    output_format: str,
+    output_file: str | None,
+    ignore_rules: str | None,
+    ignore_file: str | None,
+    show_suppressed: bool,
+) -> None:
+    """
+    Scan an MCP tool definition for operational readiness issues.
+
+    Example:
+        mcp-readiness scan-tool --tool my_tool.json --format markdown
+        cat my_tool.json | mcp-readiness scan-tool --format json
+        mcp-readiness scan-tool --tool my_tool.json --ignore-rules HEUR-001,YARA-002
+    """
+    config: Config = ctx.obj["config"]
+
+    # Load tool definition
+    if tool_path:
+        with open(tool_path, encoding="utf-8") as f:
+            tool_definition = json.load(f)
+        target_name = tool_path
+    else:
+        # Read from stdin
+        if sys.stdin.isatty():
+            raise click.UsageError("No tool definition provided. Use --tool or pipe JSON to stdin.")
+        tool_definition = json.load(sys.stdin)
+        target_name = "stdin"
+
+    # Parse providers
+    provider_list = providers.split(",") if providers else config.scan.providers
+
+    # Create suppression manager
+    from mcpreadiness.core.suppression import SuppressionManager
+
+    suppression_manager = None
+    if ignore_rules or ignore_file:
+        ignore_list = ignore_rules.split(",") if ignore_rules else None
+        suppression_manager = SuppressionManager(
+            cli_ignore_rules=ignore_list,
+            ignore_file_path=ignore_file,
+        )
+
+    # Create orchestrator and run scan
+    orchestrator = get_orchestrator(config)
+
+    # Show progress if in TTY and verbose mode and not disabled
+    no_progress = ctx.obj.get("no_progress", False)
+    show_progress = sys.stderr.isatty() and config.output.verbose and not no_progress
+
+    async def run_scan() -> ScanResult:
+        if show_progress:
+            click.echo("🔍 Scanning tool definition...", err=True)
+            available_providers = [p.name for p in orchestrator.list_available_providers()]
+            click.echo(f"📦 Providers: {', '.join(provider_list or available_providers)}", err=True)
+        
+        return await orchestrator.scan_tool(
+            tool_definition=tool_definition,
+            providers=provider_list,
+            target_name=target_name,
+            suppression_manager=suppression_manager,
+            show_suppressed=show_suppressed,
+        )
+
+    result = asyncio.run(run_scan())
+    
+    if show_progress:
+        click.echo(f"✅ Scan complete! Score: {result.readiness_score}/100", err=True)
+
+    # Output result
+    output_result(result, output_format, output_file, config.output.verbose)
+
+    # Exit with appropriate code
+    sys.exit(determine_exit_code(result, config))
+
+
+@cli.command("scan-tools")
+@click.argument("tool_paths", nargs=-1, required=True)
+@click.option(
+    "--glob",
+    "-g",
+    "use_glob",
+    is_flag=True,
+    help="Treat paths as glob patterns",
+)
+@click.option(
+    "--fail-fast",
+    is_flag=True,
+    help="Stop scanning on first error",
 )
 @click.option(
     "--providers",
@@ -170,34 +319,31 @@ def cli(ctx: click.Context, config_file: str | None, verbose: bool, no_progress:
     type=click.Path(),
     help="Output file (default: stdout)",
 )
+@click.option(
+    "--aggregate",
+    "-a",
+    is_flag=True,
+    help="Aggregate all results into a single report",
+)
 @click.pass_context
-def scan_tool(
+def scan_tools(
     ctx: click.Context,
-    tool_path: str | None,
+    tool_paths: tuple[str, ...],
+    use_glob: bool,
+    fail_fast: bool,
     providers: str | None,
     output_format: str,
     output_file: str | None,
+    aggregate: bool,
 ) -> None:
     """
-    Scan an MCP tool definition for operational readiness issues.
+    Scan multiple MCP tool definition files for operational readiness issues.
 
     Example:
-        mcp-readiness scan-tool --tool my_tool.json --format markdown
-        cat my_tool.json | mcp-readiness scan-tool --format json
+        mcp-readiness scan-tools tool1.json tool2.json --format markdown
+        mcp-readiness scan-tools "tools/**/*.json" --glob --aggregate
     """
     config: Config = ctx.obj["config"]
-
-    # Load tool definition
-    if tool_path:
-        with open(tool_path, encoding="utf-8") as f:
-            tool_definition = json.load(f)
-        target_name = tool_path
-    else:
-        # Read from stdin
-        if sys.stdin.isatty():
-            raise click.UsageError("No tool definition provided. Use --tool or pipe JSON to stdin.")
-        tool_definition = json.load(sys.stdin)
-        target_name = "stdin"
 
     # Parse providers
     provider_list = providers.split(",") if providers else config.scan.providers
@@ -205,32 +351,63 @@ def scan_tool(
     # Create orchestrator and run scan
     orchestrator = get_orchestrator(config)
 
-    # Show progress if in TTY and verbose mode and not disabled
-    no_progress = ctx.obj.get("no_progress", False)
-    show_progress = sys.stderr.isatty() and config.output.verbose and not no_progress
-
-    async def run_scan() -> ScanResult:
-        if show_progress:
-            click.echo("🔍 Scanning tool definition...", err=True)
-            available_providers = [p.name for p in orchestrator.list_available_providers()]
-            click.echo(f"📦 Providers: {', '.join(provider_list or available_providers)}", err=True)
-        
-        return await orchestrator.scan_tool(
-            tool_definition=tool_definition,
+    async def run_scan() -> list[ScanResult]:
+        return await orchestrator.scan_tools(
+            paths=list(tool_paths),
             providers=provider_list,
-            target_name=target_name,
+            fail_fast=fail_fast,
         )
 
-    result = asyncio.run(run_scan())
-    
-    if show_progress:
-        click.echo(f"✅ Scan complete! Score: {result.readiness_score}/100", err=True)
+    results = asyncio.run(run_scan())
 
-    # Output result
-    output_result(result, output_format, output_file, config.output.verbose)
+    if aggregate:
+        # Aggregate all findings into one result
+        all_findings = []
+        all_providers = set()
+        total_duration = 0
 
-    # Exit with appropriate code
-    sys.exit(determine_exit_code(result, config))
+        for result in results:
+            all_findings.extend(result.findings)
+            all_providers.update(result.providers_used)
+            if result.scan_duration_ms:
+                total_duration += result.scan_duration_ms
+
+        aggregated_result = ScanResult(
+            target=f"{len(results)} files",
+            findings=all_findings,
+            readiness_score=ScanOrchestrator.calculate_readiness_score(all_findings),
+            timestamp=results[0].timestamp if results else datetime.utcnow(),
+            providers_used=list(all_providers),
+            scan_duration_ms=total_duration,
+            metadata={
+                "scan_type": "batch",
+                "file_count": len(results),
+                "files": [r.target for r in results],
+            },
+        )
+
+        output_result(aggregated_result, output_format, output_file, config.output.verbose)
+        sys.exit(determine_exit_code(aggregated_result, config))
+    else:
+        # Output individual results
+        if output_format == "json":
+            import json
+
+            content = json.dumps([r.model_dump(mode="json") for r in results], indent=2)
+            if output_file:
+                Path(output_file).write_text(content, encoding="utf-8")
+            else:
+                click.echo(content)
+        else:
+            # For markdown/sarif, output each result separately
+            for i, result in enumerate(results):
+                if i > 0 and not output_file:
+                    click.echo("\n" + "=" * 80 + "\n")
+                output_result(result, output_format, output_file, config.output.verbose)
+
+        # Determine exit code based on worst result
+        exit_codes = [determine_exit_code(r, config) for r in results]
+        sys.exit(max(exit_codes))
 
 
 @cli.command("scan-config")
@@ -241,11 +418,13 @@ def scan_tool(
     type=click.Path(exists=True),
     required=True,
     help="Path to MCP configuration file",
+    shell_complete=click.Path(exists=True).shell_complete,
 )
 @click.option(
     "--providers",
     "-p",
     help="Comma-separated list of providers to use",
+    shell_complete=complete_provider_names,
 )
 @click.option(
     "--format",

@@ -1,0 +1,30 @@
+# Pre-commit hooks for MCP Readiness Scanner
+# https://pre-commit.com/
+
+- id: mcp-readiness-scan-tool
+  name: MCP Readiness Scanner (tool definitions)
+  description: Scan MCP tool definitions for operational readiness issues
+  entry: mcp-readiness scan-tool
+  language: python
+  files: '(^|/).*tool.*\.json$'
+  pass_filenames: true
+  args: ['--tool']
+
+- id: mcp-readiness-scan-config
+  name: MCP Readiness Scanner (MCP config)
+  description: Scan MCP configuration files for operational readiness issues
+  entry: mcp-readiness scan-config
+  language: python
+  files: '(^|/)mcp.*config.*\.json$'
+  pass_filenames: true
+  args: ['--config-file']
+
+- id: mcp-readiness-scan-all
+  name: MCP Readiness Scanner (all JSON files)
+  description: Scan all JSON files that might be MCP tool definitions
+  entry: mcp-readiness scan-tools
+  language: python
+  files: '\.json$'
+  pass_filenames: true
+  args: ['--aggregate', '--format', 'markdown']
+
