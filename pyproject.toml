@@ -72,6 +72,11 @@ Issues = "https://github.com/mcp-readiness/scanner/issues"
 [project.scripts]
 mcp-readiness = "mcpreadiness.cli:main"
 
+[project.entry-points."mcp_readiness.providers"]
+# Custom providers can register here
+# Example:
+# my_custom_provider = "my_package.providers:MyCustomProvider"
+
 [tool.hatch.build.targets.wheel]
 packages = ["mcpreadiness"]
 

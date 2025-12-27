@@ -28,8 +28,14 @@ MCP Readiness Scanner analyzes MCP tool definitions and configurations for opera
 # Install
 pip install mcp-readiness-scanner
 
-# Scan a tool definition
+# Scan a single tool definition
 mcp-readiness scan-tool --tool my_tool.json
+
+# Scan multiple tool definitions
+mcp-readiness scan-tools tool1.json tool2.json --aggregate
+
+# Scan with glob patterns
+mcp-readiness scan-tools "tools/**/*.json" --glob --format markdown
 
 # Scan an MCP config
 mcp-readiness scan-config --config-file ~/.config/mcp/config.json
@@ -39,6 +45,23 @@ mcp-readiness list-providers
 ```
 
 **No API keys required.** Works out of the box with zero external dependencies.
+
+### Shell Completion
+
+Enable tab completion for your shell:
+
+```bash
+# Bash
+_MCP_READINESS_COMPLETE=bash_source mcp-readiness > ~/.mcp-readiness-complete.bash
+echo 'source ~/.mcp-readiness-complete.bash' >> ~/.bashrc
+
+# Zsh
+_MCP_READINESS_COMPLETE=zsh_source mcp-readiness > ~/.mcp-readiness-complete.zsh
+echo 'source ~/.mcp-readiness-complete.zsh' >> ~/.zshrc
+
+# Fish
+_MCP_READINESS_COMPLETE=fish_source mcp-readiness > ~/.config/fish/completions/mcp-readiness.fish
+```
 
 ## Example Output
 
@@ -73,6 +96,31 @@ Tool 'do_everything' does not specify a timeout. Operations may hang indefinitel
 
 ## Features
 
+### Rule Suppression
+
+Suppress false positives or intentional deviations:
+
+```bash
+# Suppress specific rules via CLI
+mcp-readiness scan-tool --tool my_tool.json --ignore-rules HEUR-001,YARA-002
+
+# Use an ignore file
+mcp-readiness scan-tool --tool my_tool.json --ignore-file .mcp-readiness-ignore
+
+# Show what was suppressed
+mcp-readiness scan-tool --tool my_tool.json --ignore-rules HEUR-001 --show-suppressed
+```
+
+Or add inline suppression to your tool definition:
+
+```json
+{
+  "name": "my_tool",
+  "description": "Does something useful",
+  "mcp-readiness-ignore": ["HEUR-001", "HEUR-003"]
+}
+```
+
 ### Inspection Providers
 
 | Provider | Status | Dependencies | Description |
@@ -87,6 +135,18 @@ Tool 'do_everything' does not specify a timeout. Operations may hang indefinitel
 - **JSON** — For CI pipelines and programmatic consumption
 - **Markdown** — For PR comments and human review
 - **SARIF** — For GitHub Code Scanning integration
+- **HTML** — Self-contained interactive report (no external dependencies)
+
+```bash
+# Generate an HTML report
+mcp-readiness scan-tool --tool my_tool.json --format html --output report.html
+```
+
+HTML reports include:
+- Interactive filtering by severity
+- Collapsible finding details
+- Dark/light theme support via CSS media queries
+- Single-file format (no external CSS/JS)
 
 ### Operational Risk Categories
 
@@ -131,6 +191,30 @@ export MCP_READINESS_LLM_MODEL=ollama/llama2  # or gpt-4, claude-3-sonnet, etc.
 
 ## CI/CD Integration
 
+### Pre-commit Hook
+
+Add to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/nik-kale/mcp-readiness-scanner
+    rev: v0.1.0  # Use the latest version
+    hooks:
+      - id: mcp-readiness-scan-tool
+        # Scans files matching *tool*.json
+      - id: mcp-readiness-scan-config
+        # Scans files matching mcp*config*.json
+      - id: mcp-readiness-scan-all
+        # Scans all .json files
+```
+
+Then run:
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
 ### GitHub Actions
 
 ```yaml
@@ -169,6 +253,8 @@ Create `.mcp-readiness.toml` in your project:
 fail_on_critical = true
 fail_on_high = false
 min_score = 70
+max_concurrent_providers = 4  # Limit concurrent provider execution
+provider_timeout = 30  # Timeout per provider in seconds
 
 [heuristic]
 max_capabilities = 10

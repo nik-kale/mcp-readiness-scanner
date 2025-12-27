@@ -110,6 +110,12 @@ class ScanConfig(BaseModel):
     providers: list[str] | None = Field(
         default=None, description="Providers to use (None = all available)"
     )
+    max_concurrent_providers: int | None = Field(
+        default=None, description="Maximum number of providers to run concurrently"
+    )
+    provider_timeout: int | None = Field(
+        default=None, description="Timeout in seconds for individual provider execution"
+    )
 
 
 class Config(BaseModel):

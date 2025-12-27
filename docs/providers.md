@@ -301,3 +301,101 @@ result = await orchestrator.scan_tool(
     providers=["heuristic", "yara"]
 )
 ```
+
+## Plugin System
+
+MCP Readiness Scanner supports custom providers via Python entry points, enabling organizations to create and distribute their own inspection rules.
+
+### Creating a Plugin Provider
+
+1. **Create your provider class**:
+
+```python
+from mcpreadiness.providers.base import InspectionProvider
+from mcpreadiness.core.models import Finding, Severity
+
+class MyCustomProvider(InspectionProvider):
+    def __init__(self):
+        super().__init__(
+            name="my-custom",
+            description="Organization-specific checks",
+            version="1.0.0"
+        )
+    
+    def is_available(self) -> bool:
+        return True
+    
+    async def analyze_tool(self, tool_definition: dict) -> list[Finding]:
+        findings = []
+        # Your custom logic here
+        return findings
+```
+
+2. **Register via entry points** in your `pyproject.toml`:
+
+```toml
+[project]
+name = "my-mcp-provider"
+version = "1.0.0"
+dependencies = ["mcp-readiness-scanner>=0.1.0"]
+
+[project.entry-points."mcp_readiness.providers"]
+my_custom = "my_package.providers:MyCustomProvider"
+```
+
+3. **Install and use**:
+
+```bash
+pip install my-mcp-provider
+mcp-readiness scan-tool --tool my_tool.json
+# Your custom provider runs automatically!
+```
+
+### Plugin Discovery
+
+The scanner automatically discovers and loads plugins using Python's entry point system. Custom providers:
+
+- Are loaded on demand
+- Run alongside built-in providers
+- Can be enabled/disabled via configuration
+- Appear in `mcp-readiness list-providers`
+
+### Example Plugin
+
+See `examples/custom_provider/` for a complete example demonstrating:
+- Organizational naming conventions
+- Required metadata fields
+- SLA documentation requirements
+- Environment specifications
+
+### Publishing Plugins
+
+Package and distribute your custom providers:
+
+```bash
+# Build
+python -m build
+
+# Publish to PyPI
+python -m twine upload dist/*
+
+# Users install
+pip install your-mcp-provider
+```
+
+### Use Cases for Custom Providers
+
+- **Compliance**: Industry-specific regulations (HIPAA, SOC2, PCI-DSS)
+- **Internal policies**: Naming conventions, team ownership requirements
+- **Integration validation**: Compatibility with internal infrastructure
+- **Security policies**: Authentication, authorization, data handling
+- **Performance requirements**: SLA documentation, timeout policies
+
+### Plugin Best Practices
+
+1. **Clear documentation**: Explain what rules you check and why
+2. **Unique rule IDs**: Use a consistent prefix (e.g., `ACME-001`)
+3. **Actionable findings**: Always include remediation guidance
+4. **Fast execution**: Keep analysis performant; use async for I/O
+5. **Semantic versioning**: Follow semver for breaking changes
+6. **Error resilience**: Handle malformed input gracefully
