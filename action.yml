@@ -1,0 +1,205 @@
+name: 'MCP Readiness Scan'
+description: 'Production readiness scanner for MCP (Model Context Protocol) tool definitions - detect operational issues before they reach production'
+author: 'Nik Kale'
+
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  tool:
+    description: 'Path to tool definition JSON file'
+    required: false
+  tools:
+    description: 'Glob pattern for multiple tool files (e.g., "**/*.json")'
+    required: false
+    default: ''
+  config:
+    description: 'Path to MCP config file'
+    required: false
+  format:
+    description: 'Output format (json, markdown, sarif, html)'
+    required: false
+    default: 'sarif'
+  fail-on:
+    description: 'Fail if findings at this severity or above (critical, high, medium, low, none)'
+    required: false
+    default: 'high'
+  min-score:
+    description: 'Minimum readiness score (0-100)'
+    required: false
+    default: '70'
+  ignore-rules:
+    description: 'Comma-separated list of rule IDs to ignore'
+    required: false
+    default: ''
+  upload-sarif:
+    description: 'Upload SARIF to GitHub Code Scanning'
+    required: false
+    default: 'true'
+  output-file:
+    description: 'Path for output file'
+    required: false
+    default: 'mcp-readiness-results.sarif'
+  providers:
+    description: 'Comma-separated list of providers to use (defaults to all available)'
+    required: false
+    default: ''
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+
+outputs:
+  score:
+    description: 'Readiness score (0-100)'
+    value: ${{ steps.scan.outputs.score }}
+  production-ready:
+    description: 'Whether the tool is production ready (true/false)'
+    value: ${{ steps.scan.outputs.production-ready }}
+  findings-count:
+    description: 'Number of findings'
+    value: ${{ steps.scan.outputs.findings-count }}
+  sarif-file:
+    description: 'Path to SARIF output file'
+    value: ${{ steps.scan.outputs.sarif-file }}
+  grade:
+    description: 'Readiness grade (Excellent/Good/Acceptable/Poor/Critical)'
+    value: ${{ steps.scan.outputs.grade }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install mcp-readiness-scanner
+      shell: bash
+      run: |
+        pip install --quiet mcp-readiness-scanner
+        echo "✓ Installed mcp-readiness-scanner"
+
+    - name: Run scan
+      id: scan
+      shell: bash
+      run: |
+        set -e
+        
+        # Determine the scan command
+        ARGS=""
+        
+        if [ -n "${{ inputs.tool }}" ]; then
+          ARGS="scan-tool --tool ${{ inputs.tool }}"
+        elif [ -n "${{ inputs.config }}" ]; then
+          ARGS="scan-config --config-file ${{ inputs.config }}"
+        elif [ -n "${{ inputs.tools }}" ]; then
+          # For multiple tools, we need to scan each one
+          echo "Error: Glob pattern support for 'tools' input requires a wrapper script"
+          echo "Use 'tool' for single file or 'config' for MCP configuration"
+          exit 1
+        else
+          echo "Error: Must specify 'tool', 'tools', or 'config' input"
+          exit 1
+        fi
+        
+        # Add providers if specified
+        if [ -n "${{ inputs.providers }}" ]; then
+          ARGS="$ARGS --providers ${{ inputs.providers }}"
+        fi
+        
+        # Add ignore rules if specified
+        if [ -n "${{ inputs.ignore-rules }}" ]; then
+          # Convert comma-separated to repeated --ignore-rule flags
+          IFS=',' read -ra RULES <<< "${{ inputs.ignore-rules }}"
+          for rule in "${RULES[@]}"; do
+            ARGS="$ARGS --ignore-rule $rule"
+          done
+        fi
+        
+        # Set output format and file
+        ARGS="$ARGS --format ${{ inputs.format }} --output ${{ inputs.output-file }}"
+        
+        echo "Running: mcp-readiness $ARGS"
+        
+        # Run the scan (capture output)
+        if mcp-readiness $ARGS --verbose 2>&1 | tee scan_output.log; then
+          SCAN_EXIT=0
+        else
+          SCAN_EXIT=$?
+        fi
+        
+        # Parse the SARIF file for outputs (if format is SARIF)
+        if [ "${{ inputs.format }}" == "sarif" ] && [ -f "${{ inputs.output-file }}" ]; then
+          # Extract score from SARIF properties
+          SCORE=$(jq -r '.runs[0].properties.readinessScore // 0' "${{ inputs.output-file }}" 2>/dev/null || echo "0")
+          READY=$(jq -r '.runs[0].properties.isProductionReady // false' "${{ inputs.output-file }}" 2>/dev/null || echo "false")
+          COUNT=$(jq -r '.runs[0].results | length' "${{ inputs.output-file }}" 2>/dev/null || echo "0")
+        else
+          # Try to extract from JSON format or logs
+          SCORE=$(grep -oP 'Score: \K\d+' scan_output.log | tail -1 || echo "0")
+          COUNT=$(grep -oP 'findings: \K\d+' scan_output.log | tail -1 || echo "0")
+          READY="false"
+          if [ "$SCORE" -ge "${{ inputs.min-score }}" ]; then
+            READY="true"
+          fi
+        fi
+        
+        # Determine grade
+        if [ "$SCORE" -ge 90 ]; then
+          GRADE="Excellent"
+        elif [ "$SCORE" -ge 80 ]; then
+          GRADE="Good"
+        elif [ "$SCORE" -ge 70 ]; then
+          GRADE="Acceptable"
+        elif [ "$SCORE" -ge 50 ]; then
+          GRADE="Poor"
+        else
+          GRADE="Critical"
+        fi
+        
+        # Set outputs
+        echo "score=$SCORE" >> $GITHUB_OUTPUT
+        echo "findings-count=$COUNT" >> $GITHUB_OUTPUT
+        echo "sarif-file=${{ inputs.output-file }}" >> $GITHUB_OUTPUT
+        echo "production-ready=$READY" >> $GITHUB_OUTPUT
+        echo "grade=$GRADE" >> $GITHUB_OUTPUT
+        
+        # Display results
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📊 MCP Readiness Scan Results"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Score:            $SCORE/100 ($GRADE)"
+        echo "Findings:         $COUNT"
+        echo "Production Ready: $READY"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        
+        # Check threshold
+        if [ "$SCORE" -lt "${{ inputs.min-score }}" ]; then
+          echo "❌ Readiness score ($SCORE) is below minimum (${{ inputs.min-score }})"
+          exit 1
+        fi
+        
+        # Check fail-on severity
+        FAIL_ON="${{ inputs.fail-on }}"
+        if [ "$FAIL_ON" != "none" ] && [ "$COUNT" -gt 0 ]; then
+          # Check if there are findings at or above the fail-on severity
+          # This requires parsing the output, for now we exit with the scan exit code
+          if [ $SCAN_EXIT -ne 0 ]; then
+            echo "❌ Scan failed due to findings at $FAIL_ON severity or above"
+            exit $SCAN_EXIT
+          fi
+        fi
+        
+        echo "✅ Readiness check passed!"
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: inputs.upload-sarif == 'true' && inputs.format == 'sarif' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.output-file }}
+        category: mcp-readiness
+
