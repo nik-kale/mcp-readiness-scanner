@@ -1,52 +1,107 @@
-name: MCP Readiness Check
+name: MCP Readiness Check (Example)
 
 on:
   push:
     paths:
       - '**/*tool*.json'
       - '**/mcp*.json'
-      - '.github/workflows/mcp-readiness.yml'
+      - '.github/workflows/mcp-readiness-example.yml'
   pull_request:
     paths:
       - '**/*tool*.json'
       - '**/mcp*.json'
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   scan:
     runs-on: ubuntu-latest
     permissions:
-      security-events: write  # Required for SARIF upload
       contents: read
-      pull-requests: write    # Optional: for PR comments
+      pull-requests: write # Optional: for PR comments
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # Example 1: Scan a single tool
-      - name: Scan MCP Tool
-        uses: nik-kale/mcp-readiness-scanner@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          tool: examples/sample_tool_definitions/good_tool.json
-          min-score: 70
-          fail-on: high
+          python-version: '3.11'
 
-      # Example 2: Scan MCP config
-      - name: Scan MCP Config
-        if: always()  # Run even if previous step failed
-        uses: nik-kale/mcp-readiness-scanner@v1
-        with:
-          config: examples/sample_configs/windsurf_config.json
-          min-score: 60
+      - name: Install mcp-readiness-scanner
+        run: |
+          pip install git+https://github.com/nik-kale/mcp-readiness-scanner.git
 
-      # Example 3: Custom output format
-      - name: Scan and Output Markdown
-        if: always()
-        uses: nik-kale/mcp-readiness-scanner@v1
-        with:
-          tool: examples/sample_tool_definitions/bad_tool.json
-          format: markdown
-          output-file: mcp-scan-results.md
-          upload-sarif: false
+      - name: Create example tool files (if not exist)
+        run: |
+          mkdir -p examples/sample_tool_definitions
+          mkdir -p examples/sample_configs
+
+          # Create good_tool.json if it doesn't exist
+          if [ ! -f examples/sample_tool_definitions/good_tool.json ]; then
+            cat > examples/sample_tool_definitions/good_tool.json << 'EOF'
+          {
+            "name": "fetch_user",
+            "version": "1.0.0",
+            "description": "Fetches user profile by ID. Returns 404 if not found. Connections auto-closed on timeout.",
+            "timeout": 30000,
+            "maxRetries": 3,
+            "rateLimit": { "maxRequests": 100, "windowMs": 60000 },
+            "inputSchema": {
+              "type": "object",
+              "properties": { "userId": { "type": "string" } },
+              "required": ["userId"]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": { "id": { "type": "string" }, "name": { "type": "string" } }
+            },
+            "errorSchema": {
+              "type": "object",
+              "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+            },
+            "observability": { "logging": { "level": "info" }, "metrics": { "enabled": true } }
+          }
+          EOF
+          fi
+
+          # Create bad_tool.json if it doesn't exist
+          if [ ! -f examples/sample_tool_definitions/bad_tool.json ]; then
+            cat > examples/sample_tool_definitions/bad_tool.json << 'EOF'
+          {
+            "name": "do_everything",
+            "description": "Executes any operation",
+            "inputSchema": {
+              "type": "object",
+              "properties": { "action": { "type": "string" } }
+            }
+          }
+          EOF
+          fi
+
+      # Example 1: Scan a good tool (should pass)
+      - name: Scan Good Tool (Markdown output)
+        run: |
+          echo "=== Scanning good_tool.json ==="
+          mcp-readiness scan-tool --tool examples/sample_tool_definitions/good_tool.json --format markdown || true
+
+      # Example 2: Scan a bad tool (will show findings)
+      - name: Scan Bad Tool (Markdown output)
+        run: |
+          echo "=== Scanning bad_tool.json ==="
+          mcp-readiness scan-tool --tool examples/sample_tool_definitions/bad_tool.json --format markdown || true
+
+      # Example 3: JSON output for programmatic use
+      - name: Scan with JSON output
+        run: |
+          echo "=== JSON Output ==="
+          mcp-readiness scan-tool --tool examples/sample_tool_definitions/bad_tool.json --format json > mcp-scan-results.json || true
+          cat mcp-scan-results.json
+
+      # Example 4: Save Markdown report as artifact
+      - name: Generate Markdown Report
+        run: |
+          mcp-readiness scan-tool --tool examples/sample_tool_definitions/bad_tool.json --format markdown > mcp-scan-results.md || true
 
       - name: Upload scan results artifact
         if: always()
@@ -54,6 +109,12 @@ jobs:
         with:
           name: mcp-scan-results
           path: |
-            mcp-readiness-results.sarif
+            mcp-scan-results.json
             mcp-scan-results.md
+          if-no-files-found: ignore
 
+      - name: Summary
+        run: |
+          echo "✅ MCP Readiness scan examples completed!"
+          echo ""
+          echo "Results saved to artifacts."

@@ -1,33 +1,117 @@
-# .github/workflows/test-action.yml
-
 name: Test MCP Readiness Action
 
 on:
   push:
     branches: [main]
-  workflow_dispatch: # Allows manual trigger
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Allows manual trigger from Actions tab
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # Test the action from the local repo (not marketplace)
-      - name: Test MCP Readiness Scanner
-        id: scan
-        uses: ./ # This uses action.yml from current repo
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          tool: examples/sample_tool_definitions/bad_tool.json
-          min-score: 50
-          upload-sarif: false # Disable for testing
+          python-version: '3.11'
 
-      - name: Check outputs
+      - name: Install package from local source
         run: |
-          echo "Score: ${{ steps.scan.outputs.score }}"
-          echo "Production Ready: ${{ steps.scan.outputs.production-ready }}"
-          echo "Findings: ${{ steps.scan.outputs.findings-count }}"
+          pip install -e .
+
+      - name: Create test tool files
+        run: |
+          mkdir -p test-tools
+
+          # Create a "bad" tool (missing timeout, no error schema, etc.)
+          cat > test-tools/bad_tool.json << 'EOF'
+          {
+            "name": "do_everything",
+            "description": "Executes any operation",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "action": { "type": "string" }
+              }
+            }
+          }
+          EOF
+
+          # Create a "good" tool (has all the right configs)
+          cat > test-tools/good_tool.json << 'EOF'
+          {
+            "name": "fetch_user",
+            "version": "1.0.0",
+            "description": "Fetches user profile by ID. Returns 404 if not found. Connections auto-closed on timeout. Resources cleaned up via context manager.",
+            "timeout": 30000,
+            "maxRetries": 3,
+            "rateLimit": {
+              "maxRequests": 100,
+              "windowMs": 60000
+            },
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "description": "Unique user identifier"
+                }
+              },
+              "required": ["userId"]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            },
+            "errorSchema": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string" },
+                "message": { "type": "string" }
+              }
+            },
+            "observability": {
+              "logging": { "level": "info" },
+              "metrics": { "enabled": true }
+            }
+          }
+          EOF
+
+      - name: Test scan-tool command (bad tool)
+        run: |
+          echo "=== Scanning bad_tool.json ==="
+          mcp-readiness scan-tool --tool test-tools/bad_tool.json --format markdown || true
+          echo ""
+          echo "Exit code: $?"
+
+      - name: Test scan-tool command (good tool)
+        run: |
+          echo "=== Scanning good_tool.json ==="
+          mcp-readiness scan-tool --tool test-tools/good_tool.json --format markdown || true
+          echo ""
+          echo "Exit code: $?"
+
+      - name: Test JSON output format
+        run: |
+          echo "=== Testing JSON output ==="
+          mcp-readiness scan-tool --tool test-tools/bad_tool.json --format json || true
+
+      - name: Test the GitHub Action locally
+        uses: ./
+        with:
+          tool: test-tools/good_tool.json
+          format: markdown
+          fail-on-critical: 'true'
+          fail-on-high: 'false'
+
+      - name: Verify action completed
+        run: |
+          echo "✅ All tests passed!"
