@@ -1,0 +1,32 @@
+# .github/workflows/test-action.yml
+
+name: Test MCP Readiness Action
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Test the action from the local repo (not marketplace)
+      - name: Test MCP Readiness Scanner
+        uses: ./ # This uses action.yml from current repo
+        with:
+          tool: examples/sample_tool_definitions/bad_tool.json
+          min-score: 50
+          upload-sarif: false # Disable for testing
+
+      - name: Check outputs
+        run: |
+          echo "Score: ${{ steps.scan.outputs.score }}"
+          echo "Production Ready: ${{ steps.scan.outputs.production-ready }}"
+          echo "Findings: ${{ steps.scan.outputs.findings-count }}"

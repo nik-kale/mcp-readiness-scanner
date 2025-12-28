@@ -21,7 +21,7 @@ The heuristic provider performs zero-dependency static analysis of tool definiti
 
 ## HEUR-001: Missing Timeout
 
-**Severity**: HIGH  
+**Severity**: HIGH
 **Category**: `missing_timeout_guard`
 
 ### Description
@@ -68,7 +68,7 @@ Add a `timeout` or `timeoutMs` field with a reasonable value (e.g., 30000 for 30
 
 ## HEUR-002: Timeout Too Long
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Category**: `missing_timeout_guard`
 
 ### Description
@@ -109,7 +109,7 @@ Reduce timeout to 30-120 seconds. If operations truly take longer, consider:
 
 ## HEUR-003: No Retry Limit
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Category**: `unsafe_retry_loop`
 
 ### Description
@@ -156,7 +156,7 @@ Add a `maxRetries` field with a reasonable value:
 
 ## HEUR-004: Unlimited Retries
 
-**Severity**: HIGH  
+**Severity**: HIGH
 **Category**: `unsafe_retry_loop`
 
 ### Description
@@ -198,7 +198,7 @@ Set a finite retry limit (recommended: 3-5 retries). If persistence is required,
 
 ## HEUR-005: No Backoff Strategy
 
-**Severity**: LOW  
+**Severity**: LOW
 **Category**: `unsafe_retry_loop`
 
 ### Description
@@ -256,7 +256,7 @@ Or linear backoff:
 
 ## HEUR-006: Missing Error Schema
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Category**: `missing_error_schema`
 
 ### Description
@@ -307,7 +307,7 @@ Define a structured error schema with at minimum:
 
 ## HEUR-007: Error Schema Missing Code Field
 
-**Severity**: LOW  
+**Severity**: LOW
 **Category**: `missing_error_schema`
 
 ### Description
@@ -340,7 +340,7 @@ If `errorSchema` exists, checks if properties include:
   "errorSchema": {
     "type": "object",
     "properties": {
-      "code": { 
+      "code": {
         "type": "string",
         "enum": ["VALIDATION_ERROR", "NOT_FOUND", "INTERNAL_ERROR"]
       },
@@ -358,7 +358,7 @@ Add a `code` property to error schema, preferably with enum of possible error co
 
 ## HEUR-008: No Output Schema
 
-**Severity**: LOW  
+**Severity**: LOW
 **Category**: `missing_error_schema`
 
 ### Description
@@ -407,7 +407,7 @@ Define an `outputSchema` using JSON Schema describing the structure of successfu
 
 ## HEUR-009: Vague Description
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Category**: `overloaded_tool_scope`
 
 ### Description
@@ -451,7 +451,7 @@ Write a clear, detailed description (50-200 characters) that explains:
 
 ## HEUR-010: Too Many Capabilities
 
-**Severity**: HIGH  
+**Severity**: HIGH
 **Category**: `overloaded_tool_scope`
 
 ### Description
@@ -490,7 +490,7 @@ Split into multiple focused tools, each with a specific, well-defined purpose. F
 
 ## HEUR-011: No Required Fields
 
-**Severity**: LOW  
+**Severity**: LOW
 **Category**: `silent_failure_path`
 
 ### Description
@@ -538,7 +538,7 @@ Add a `required` array listing mandatory input fields.
 
 ## HEUR-012: No Input Validation Hints
 
-**Severity**: INFO  
+**Severity**: INFO
 **Category**: `silent_failure_path`
 
 ### Description
@@ -576,12 +576,12 @@ Flags if >50% of properties lack validation.
 {
   "inputSchema": {
     "properties": {
-      "email": { 
+      "email": {
         "type": "string",
         "format": "email",
         "pattern": "^[^@]+@[^@]+\\.[^@]+$"
       },
-      "age": { 
+      "age": {
         "type": "integer",
         "minimum": 0,
         "maximum": 150
@@ -599,7 +599,7 @@ Add validation constraints to input properties appropriate to their types.
 
 ## HEUR-013: No Rate Limit
 
-**Severity**: LOW  
+**Severity**: LOW
 **Category**: `unsafe_retry_loop`
 
 ### Description
@@ -645,7 +645,7 @@ Add rate limit configuration specifying maximum calls per time period.
 
 ## HEUR-014: No Version
 
-**Severity**: LOW  
+**Severity**: LOW
 **Category**: `no_observability_hooks`
 
 ### Description
@@ -687,7 +687,7 @@ Add a `version` field following semantic versioning (MAJOR.MINOR.PATCH).
 
 ## HEUR-015: No Observability Config
 
-**Severity**: LOW  
+**Severity**: LOW
 **Category**: `no_observability_hooks`
 
 ### Description
@@ -742,7 +742,7 @@ Add logging, metrics, or tracing configuration to enable monitoring and debuggin
 
 ## HEUR-016: Resource Cleanup Not Documented
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Category**: `silent_failure_path`
 
 ### Description
@@ -781,7 +781,7 @@ Document how resources are cleaned up. Ensure proper cleanup in error paths and 
 
 ## HEUR-017: No Idempotency Indication
 
-**Severity**: INFO  
+**Severity**: INFO
 **Category**: `non_deterministic_response`
 
 ### Description
@@ -827,7 +827,7 @@ Document whether the operation is idempotent and safe to retry. If not idempoten
 
 ## HEUR-018: Dangerous Operation Keywords
 
-**Severity**: HIGH  
+**Severity**: HIGH
 **Category**: `overloaded_tool_scope`
 
 ### Description
@@ -872,7 +872,7 @@ Add safeguards:
 
 ## HEUR-019: No Authentication Context
 
-**Severity**: INFO  
+**Severity**: INFO
 **Category**: `silent_failure_path`
 
 ### Description
@@ -913,7 +913,7 @@ Document authentication requirements explicitly.
 
 ## HEUR-020: Circular Dependency Risk
 
-**Severity**: MEDIUM  
+**Severity**: MEDIUM
 **Category**: `unsafe_retry_loop`
 
 ### Description

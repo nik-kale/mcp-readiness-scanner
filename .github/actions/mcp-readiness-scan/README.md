@@ -31,10 +31,10 @@ jobs:
     permissions:
       security-events: write  # Required for SARIF upload
       contents: read
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Scan MCP Tool
         uses: nik-kale/mcp-readiness-scanner@v1
         with:
@@ -134,7 +134,7 @@ jobs:
         owner: context.repo.owner,
         repo: context.repo.repo,
         body: `## MCP Readiness Scan Results
-        
+
         📊 **Score:** ${{ steps.scan.outputs.score }}/100 (${{ steps.scan.outputs.grade }})
         🔍 **Findings:** ${{ steps.scan.outputs.findings-count }}
         ✅ **Production Ready:** ${{ steps.scan.outputs.production-ready }}`
@@ -163,10 +163,10 @@ jobs:
           - tools/tool1.json
           - tools/tool2.json
           - tools/tool3.json
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: nik-kale/mcp-readiness-scanner@v1
         with:
           tool: ${{ matrix.tool }}

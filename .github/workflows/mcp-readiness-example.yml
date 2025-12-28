@@ -18,10 +18,10 @@ jobs:
       security-events: write  # Required for SARIF upload
       contents: read
       pull-requests: write    # Optional: for PR comments
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       # Example 1: Scan a single tool
       - name: Scan MCP Tool
         uses: nik-kale/mcp-readiness-scanner@v1
@@ -29,7 +29,7 @@ jobs:
           tool: examples/sample_tool_definitions/good_tool.json
           min-score: 70
           fail-on: high
-      
+
       # Example 2: Scan MCP config
       - name: Scan MCP Config
         if: always()  # Run even if previous step failed
@@ -47,7 +47,7 @@ jobs:
           format: markdown
           output-file: mcp-scan-results.md
           upload-sarif: false
-      
+
       - name: Upload scan results artifact
         if: always()
         uses: actions/upload-artifact@v4
