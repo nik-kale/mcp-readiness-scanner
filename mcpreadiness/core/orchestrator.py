@@ -16,12 +16,13 @@ from mcpreadiness.core.models import Finding, ScanResult, Severity
 from mcpreadiness.providers.base import InspectionProvider
 
 # Severity deduction points for readiness score calculation
+# Aligned with MVP spec requirements
 SEVERITY_DEDUCTIONS: dict[Severity, int] = {
     Severity.CRITICAL: 25,
     Severity.HIGH: 15,
-    Severity.MEDIUM: 10,
-    Severity.LOW: 5,
-    Severity.INFO: 0,
+    Severity.MEDIUM: 8,
+    Severity.LOW: 3,
+    Severity.INFO: 1,
 }
 
 
@@ -141,11 +142,11 @@ class ScanOrchestrator:
         Calculate readiness score based on findings.
 
         Starts at 100 and deducts points per finding based on severity:
-        - CRITICAL: -25
-        - HIGH: -15
-        - MEDIUM: -10
-        - LOW: -5
-        - INFO: 0
+        - CRITICAL: -25 points each
+        - HIGH: -15 points each
+        - MEDIUM: -8 points each
+        - LOW: -3 points each
+        - INFO: -1 point each
 
         Args:
             findings: List of findings from all providers
@@ -157,6 +158,54 @@ class ScanOrchestrator:
         for finding in findings:
             score -= SEVERITY_DEDUCTIONS.get(finding.severity, 0)
         return max(0, score)
+
+    @staticmethod
+    def get_readiness_grade(score: int) -> str:
+        """
+        Convert readiness score to a letter grade.
+
+        Scoring:
+        - 90-100: Excellent
+        - 80-89: Good
+        - 70-79: Acceptable
+        - 50-69: Poor
+        - 0-49: Critical
+
+        Args:
+            score: Readiness score (0-100)
+
+        Returns:
+            Grade string
+        """
+        if score >= 90:
+            return "Excellent"
+        elif score >= 80:
+            return "Good"
+        elif score >= 70:
+            return "Acceptable"
+        elif score >= 50:
+            return "Poor"
+        else:
+            return "Critical"
+
+    @staticmethod
+    def is_production_ready(score: int, findings: list[Finding]) -> bool:
+        """
+        Determine if a tool is production ready based on score and findings.
+
+        Production ready means:
+        - Score >= 70
+        - No critical findings
+
+        Args:
+            score: Readiness score (0-100)
+            findings: List of findings
+
+        Returns:
+            True if production ready, False otherwise
+        """
+        has_critical = any(f.severity == Severity.CRITICAL for f in findings)
+        return score >= 70 and not has_critical
 
     async def _run_provider_tool_analysis(
         self,
