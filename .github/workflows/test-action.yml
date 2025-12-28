@@ -19,6 +19,7 @@ jobs:
 
       # Test the action from the local repo (not marketplace)
       - name: Test MCP Readiness Scanner
+        id: scan
         uses: ./ # This uses action.yml from current repo
         with:
           tool: examples/sample_tool_definitions/bad_tool.json
