@@ -1,0 +1,59 @@
+name: MCP Readiness Check
+
+on:
+  push:
+    paths:
+      - '**/*tool*.json'
+      - '**/mcp*.json'
+      - '.github/workflows/mcp-readiness.yml'
+  pull_request:
+    paths:
+      - '**/*tool*.json'
+      - '**/mcp*.json'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # Required for SARIF upload
+      contents: read
+      pull-requests: write    # Optional: for PR comments
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Example 1: Scan a single tool
+      - name: Scan MCP Tool
+        uses: nik-kale/mcp-readiness-scanner@v1
+        with:
+          tool: examples/sample_tool_definitions/good_tool.json
+          min-score: 70
+          fail-on: high
+      
+      # Example 2: Scan MCP config
+      - name: Scan MCP Config
+        if: always()  # Run even if previous step failed
+        uses: nik-kale/mcp-readiness-scanner@v1
+        with:
+          config: examples/sample_configs/windsurf_config.json
+          min-score: 60
+
+      # Example 3: Custom output format
+      - name: Scan and Output Markdown
+        if: always()
+        uses: nik-kale/mcp-readiness-scanner@v1
+        with:
+          tool: examples/sample_tool_definitions/bad_tool.json
+          format: markdown
+          output-file: mcp-scan-results.md
+          upload-sarif: false
+      
+      - name: Upload scan results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-scan-results
+          path: |
+            mcp-readiness-results.sarif
+            mcp-scan-results.md
+
