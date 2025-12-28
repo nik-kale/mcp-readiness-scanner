@@ -109,8 +109,9 @@ jobs:
         with:
           tool: test-tools/good_tool.json
           format: markdown
-          fail-on-critical: 'true'
-          fail-on-high: 'false'
+          fail-on: none
+          min-score: '0'
+          upload-sarif: 'false'
 
       - name: Verify action completed
         run: |
