@@ -86,10 +86,10 @@ runs:
       shell: bash
       run: |
         set -e
-        
+
         # Determine the scan command
         ARGS=""
-        
+
         if [ -n "${{ inputs.tool }}" ]; then
           ARGS="scan-tool --tool ${{ inputs.tool }}"
         elif [ -n "${{ inputs.config }}" ]; then
@@ -103,12 +103,12 @@ runs:
           echo "Error: Must specify 'tool', 'tools', or 'config' input"
           exit 1
         fi
-        
+
         # Add providers if specified
         if [ -n "${{ inputs.providers }}" ]; then
           ARGS="$ARGS --providers ${{ inputs.providers }}"
         fi
-        
+
         # Add ignore rules if specified
         if [ -n "${{ inputs.ignore-rules }}" ]; then
           # Convert comma-separated to repeated --ignore-rule flags
@@ -117,19 +117,19 @@ runs:
             ARGS="$ARGS --ignore-rule $rule"
           done
         fi
-        
+
         # Set output format and file
         ARGS="$ARGS --format ${{ inputs.format }} --output ${{ inputs.output-file }}"
-        
+
         echo "Running: mcp-readiness $ARGS"
-        
+
         # Run the scan (capture output)
         if mcp-readiness $ARGS --verbose 2>&1 | tee scan_output.log; then
           SCAN_EXIT=0
         else
           SCAN_EXIT=$?
         fi
-        
+
         # Parse the SARIF file for outputs (if format is SARIF)
         if [ "${{ inputs.format }}" == "sarif" ] && [ -f "${{ inputs.output-file }}" ]; then
           # Extract score from SARIF properties
@@ -145,7 +145,7 @@ runs:
             READY="true"
           fi
         fi
-        
+
         # Determine grade
         if [ "$SCORE" -ge 90 ]; then
           GRADE="Excellent"
@@ -158,14 +158,14 @@ runs:
         else
           GRADE="Critical"
         fi
-        
+
         # Set outputs
         echo "score=$SCORE" >> $GITHUB_OUTPUT
         echo "findings-count=$COUNT" >> $GITHUB_OUTPUT
         echo "sarif-file=${{ inputs.output-file }}" >> $GITHUB_OUTPUT
         echo "production-ready=$READY" >> $GITHUB_OUTPUT
         echo "grade=$GRADE" >> $GITHUB_OUTPUT
-        
+
         # Display results
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -176,13 +176,13 @@ runs:
         echo "Production Ready: $READY"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        
+
         # Check threshold
         if [ "$SCORE" -lt "${{ inputs.min-score }}" ]; then
           echo "❌ Readiness score ($SCORE) is below minimum (${{ inputs.min-score }})"
           exit 1
         fi
-        
+
         # Check fail-on severity
         FAIL_ON="${{ inputs.fail-on }}"
         if [ "$FAIL_ON" != "none" ] && [ "$COUNT" -gt 0 ]; then
@@ -193,7 +193,7 @@ runs:
             exit $SCAN_EXIT
           fi
         fi
-        
+
         echo "✅ Readiness check passed!"
 
     - name: Upload SARIF to GitHub Code Scanning
