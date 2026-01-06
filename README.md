@@ -22,7 +22,7 @@ MCP Readiness Scanner analyzes MCP tool definitions and configurations for opera
 - **Overloaded tool scope** — Is the tool trying to do too much?
 - **Missing error schemas** — Can agents handle failures programmatically?
 
-![Demo of feature](demos/demo.gif)
+![MCP Readiness Scanner Demo](https://raw.githubusercontent.com/nik-kale/mcp-readiness-scanner/main/demos/demo.gif)
 
 ## Quick Start
 
