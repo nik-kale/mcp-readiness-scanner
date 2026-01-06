@@ -22,6 +22,8 @@ MCP Readiness Scanner analyzes MCP tool definitions and configurations for opera
 - **Overloaded tool scope** — Is the tool trying to do too much?
 - **Missing error schemas** — Can agents handle failures programmatically?
 
+![Demo of feature](demos/demo.gif)
+
 ## Quick Start
 
 ```bash
@@ -123,12 +125,12 @@ Or add inline suppression to your tool definition:
 
 ### Inspection Providers
 
-| Provider | Status | Dependencies | Description |
-|----------|--------|--------------|-------------|
-| **Heuristic** | ✅ Always Available | None | Static analysis for common issues |
-| **YARA** | Optional | `yara-python` | Pattern matching on metadata |
-| **OPA** | Optional | `opa` binary | Policy-based checks with Rego |
-| **LLM Judge** | Disabled by default | LiteLLM + model | Semantic analysis |
+| Provider      | Status              | Dependencies    | Description                       |
+| ------------- | ------------------- | --------------- | --------------------------------- |
+| **Heuristic** | ✅ Always Available | None            | Static analysis for common issues |
+| **YARA**      | Optional            | `yara-python`   | Pattern matching on metadata      |
+| **OPA**       | Optional            | `opa` binary    | Policy-based checks with Rego     |
+| **LLM Judge** | Disabled by default | LiteLLM + model | Semantic analysis                 |
 
 ### Output Formats
 
@@ -143,6 +145,7 @@ mcp-readiness scan-tool --tool my_tool.json --format html --output report.html
 ```
 
 HTML reports include:
+
 - Interactive filtering by severity
 - Collapsible finding details
 - Dark/light theme support via CSS media queries
@@ -150,16 +153,16 @@ HTML reports include:
 
 ### Operational Risk Categories
 
-| Category | Description |
-|----------|-------------|
-| `silent_failure_path` | Tool may fail without surfacing errors |
-| `non_deterministic_response` | Response format varies unpredictably |
-| `missing_timeout_guard` | Operations may hang indefinitely |
-| `no_observability_hooks` | Lacks logging, metrics, or tracing |
-| `unsafe_retry_loop` | Retry logic may cause resource exhaustion |
-| `overloaded_tool_scope` | Too many capabilities in one tool |
-| `no_fallback_contract` | No graceful degradation defined |
-| `missing_error_schema` | Error responses lack structure |
+| Category                     | Description                               |
+| ---------------------------- | ----------------------------------------- |
+| `silent_failure_path`        | Tool may fail without surfacing errors    |
+| `non_deterministic_response` | Response format varies unpredictably      |
+| `missing_timeout_guard`      | Operations may hang indefinitely          |
+| `no_observability_hooks`     | Lacks logging, metrics, or tracing        |
+| `unsafe_retry_loop`          | Retry logic may cause resource exhaustion |
+| `overloaded_tool_scope`      | Too many capabilities in one tool         |
+| `no_fallback_contract`       | No graceful degradation defined           |
+| `missing_error_schema`       | Error responses lack structure            |
 
 ## Installation
 
@@ -198,7 +201,7 @@ Add to your `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/nik-kale/mcp-readiness-scanner
-    rev: v0.1.0  # Use the latest version
+    rev: v0.1.0 # Use the latest version
     hooks:
       - id: mcp-readiness-scan-tool
         # Scans files matching *tool*.json
@@ -238,11 +241,11 @@ jobs:
 
 ### Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success (no critical/high findings) |
-| 1 | High severity findings found |
-| 2 | Critical findings found |
+| Code | Meaning                             |
+| ---- | ----------------------------------- |
+| 0    | Success (no critical/high findings) |
+| 1    | High severity findings found        |
+| 2    | Critical findings found             |
 
 ## Configuration
 
